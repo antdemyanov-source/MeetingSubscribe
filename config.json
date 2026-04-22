@@ -1,0 +1,11 @@
+{
+  "recordings_dir": "C:\\AI\\MeetingScribe\\recordings",
+  "default_language": "ru",
+  "default_meeting_type": "work",
+  "whisper_model": "turbo",
+  "whisper_device": "cpu",
+  "anthropic_api_key": "",
+  "anthropic_model": "claude-sonnet-4-6",
+  "audio_sample_rate": 44100,
+  "keep_wav": false
+}
