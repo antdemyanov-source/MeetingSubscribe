@@ -17,8 +17,8 @@ def _make_config(tmp_path, **overrides):
 
 
 @patch("meetingscribe.pipeline.convert_to_ogg")
-@patch("meetingscribe.pipeline.summarize")
-@patch("meetingscribe.pipeline.transcribe")
+@patch("meetingscribe.summarizer.summarize")
+@patch("meetingscribe.transcriber.transcribe")
 def test_pipeline_runs_all_steps(mock_transcribe, mock_summarize, mock_convert, tmp_path):
     config = _make_config(tmp_path)
     wav_path = tmp_path / "audio.wav"
@@ -49,8 +49,8 @@ def test_pipeline_runs_all_steps(mock_transcribe, mock_summarize, mock_convert, 
 
 
 @patch("meetingscribe.pipeline.convert_to_ogg")
-@patch("meetingscribe.pipeline.summarize")
-@patch("meetingscribe.pipeline.transcribe")
+@patch("meetingscribe.summarizer.summarize")
+@patch("meetingscribe.transcriber.transcribe")
 def test_pipeline_writes_meta_json(mock_transcribe, mock_summarize, mock_convert, tmp_path):
     config = _make_config(tmp_path)
     wav_path = tmp_path / "audio.wav"
@@ -80,8 +80,8 @@ def test_pipeline_writes_meta_json(mock_transcribe, mock_summarize, mock_convert
 
 
 @patch("meetingscribe.pipeline.convert_to_ogg")
-@patch("meetingscribe.pipeline.summarize")
-@patch("meetingscribe.pipeline.transcribe")
+@patch("meetingscribe.summarizer.summarize")
+@patch("meetingscribe.transcriber.transcribe")
 def test_pipeline_skips_summary_without_api_key(mock_transcribe, mock_summarize, mock_convert, tmp_path):
     config = _make_config(tmp_path, anthropic_api_key="")
     wav_path = tmp_path / "audio.wav"

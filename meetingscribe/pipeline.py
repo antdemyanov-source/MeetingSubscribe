@@ -8,8 +8,6 @@ from typing import Callable
 
 from meetingscribe.config import Config
 from meetingscribe.storage import create_recording_paths
-from meetingscribe.transcriber import transcribe
-from meetingscribe.summarizer import summarize
 
 
 class PipelineStatus(Enum):
@@ -58,6 +56,7 @@ class Pipeline:
             shutil.move(str(wav_path), str(target_wav))
 
         on_status(PipelineStatus.TRANSCRIBING)
+        from meetingscribe.transcriber import transcribe
         transcript_text = transcribe(
             audio_path=target_wav,
             output_path=paths.transcript,
@@ -67,6 +66,7 @@ class Pipeline:
         )
 
         on_status(PipelineStatus.SUMMARIZING)
+        from meetingscribe.summarizer import summarize
         summarize(
             transcript=transcript_text,
             output_path=paths.summary,
