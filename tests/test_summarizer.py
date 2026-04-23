@@ -85,6 +85,7 @@ def test_summarize_returns_none_when_ollama_unavailable(mock_httpx, tmp_path):
     mock_httpx.post.side_effect = real_httpx.ConnectError("Connection refused")
     mock_httpx.ConnectError = real_httpx.ConnectError
     mock_httpx.HTTPStatusError = real_httpx.HTTPStatusError
+    mock_httpx.ReadTimeout = real_httpx.ReadTimeout
 
     output_path = tmp_path / "summary.md"
     result = summarize(

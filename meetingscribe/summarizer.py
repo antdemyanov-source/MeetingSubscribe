@@ -175,10 +175,58 @@ def _summarize_ollama(prompt: str, ollama_url: str, ollama_model: str) -> str:
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
         },
-        timeout=600.0,
+        timeout=1800.0,
     )
     response.raise_for_status()
     return response.json()["message"]["content"]
+
+
+CHUNK_SIZE = 6000
+
+CHUNK_PROMPT = """Проанализируй этот фрагмент транскрипции встречи и выдели:
+- Ключевые темы и обсуждения
+- Принятые решения
+- Задачи и ответственные
+- Важные цитаты
+
+Фрагмент {chunk_num} из {total_chunks}:
+
+{chunk_text}"""
+
+MERGE_PROMPT = """Ты получил промежуточные саммари частей одной встречи. Объедини их в единое структурированное саммари.
+
+{format_instructions}
+
+Промежуточные саммари:
+
+{chunk_summaries}"""
+
+
+def _split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
+    lines = text.split("\n")
+    chunks = []
+    current_chunk: list[str] = []
+    current_size = 0
+
+    for line in lines:
+        line_size = len(line) + 1
+        if current_size + line_size > chunk_size and current_chunk:
+            chunks.append("\n".join(current_chunk))
+            current_chunk = []
+            current_size = 0
+        current_chunk.append(line)
+        current_size += line_size
+
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+
+    return chunks
+
+
+def _call_llm(prompt: str, api_key: str, model: str, ollama_url: str, ollama_model: str) -> str:
+    if api_key:
+        return _summarize_claude(prompt, api_key, model)
+    return _summarize_ollama(prompt, ollama_url, ollama_model)
 
 
 def summarize(
@@ -192,21 +240,41 @@ def summarize(
     ollama_url: str = "http://localhost:11434",
     ollama_model: str = "qwen2.5:7b",
 ) -> str | None:
-    prompt = build_prompt(
-        transcript,
-        meeting_type,
-        date=datetime.now().strftime("%Y-%m-%d %H:%M"),
-        duration=_format_duration(duration_seconds),
-        language=LANGUAGE_NAMES.get(language, language),
-    )
+    date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    duration_str = _format_duration(duration_seconds)
+    lang_str = LANGUAGE_NAMES.get(language, language)
 
-    if api_key:
-        summary_text = _summarize_claude(prompt, api_key, model)
-    else:
-        try:
-            summary_text = _summarize_ollama(prompt, ollama_url, ollama_model)
-        except (httpx.ConnectError, httpx.HTTPStatusError):
-            return None
+    try:
+        if len(transcript) <= CHUNK_SIZE:
+            prompt = build_prompt(
+                transcript, meeting_type,
+                date=date_str, duration=duration_str, language=lang_str,
+            )
+            summary_text = _call_llm(prompt, api_key, model, ollama_url, ollama_model)
+        else:
+            chunks = _split_into_chunks(transcript)
+            chunk_summaries = []
+            for i, chunk in enumerate(chunks):
+                chunk_prompt = CHUNK_PROMPT.format(
+                    chunk_num=i + 1, total_chunks=len(chunks), chunk_text=chunk,
+                )
+                chunk_summary = _call_llm(chunk_prompt, api_key, model, ollama_url, ollama_model)
+                chunk_summaries.append(f"### Часть {i + 1}\n{chunk_summary}")
+
+            template = PROMPTS.get(meeting_type, PROMPTS["work"])
+            format_part = template.split("Транскрипция:")[0]
+            format_instructions = format_part.format(
+                date=date_str, duration=duration_str, language=lang_str,
+                transcript="",
+            )
+
+            merge_prompt = MERGE_PROMPT.format(
+                format_instructions=f"Используй этот формат:\n{format_instructions}",
+                chunk_summaries="\n\n".join(chunk_summaries),
+            )
+            summary_text = _call_llm(merge_prompt, api_key, model, ollama_url, ollama_model)
+    except (httpx.ConnectError, httpx.HTTPStatusError, httpx.ReadTimeout):
+        return None
 
     output_path.write_text(summary_text, encoding="utf-8")
     return summary_text
