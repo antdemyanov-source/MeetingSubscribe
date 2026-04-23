@@ -56,8 +56,36 @@ def test_summarize_calls_api_and_writes_file(mock_anthropic, tmp_path):
     assert len(call_kwargs["messages"]) == 1
 
 
-@patch("meetingscribe.summarizer.anthropic")
-def test_summarize_returns_none_on_empty_key(mock_anthropic, tmp_path):
+@patch("meetingscribe.summarizer.httpx")
+def test_summarize_uses_ollama_when_no_api_key(mock_httpx, tmp_path):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"message": {"content": "# Ollama Summary"}}
+    mock_httpx.post.return_value = mock_response
+
+    output_path = tmp_path / "summary.md"
+    result = summarize(
+        transcript="Test transcript",
+        output_path=output_path,
+        meeting_type="work",
+        language="ru",
+        duration_seconds=60,
+        api_key="",
+        ollama_model="qwen2.5:7b",
+    )
+
+    assert result is not None
+    assert output_path.exists()
+    assert "Ollama Summary" in output_path.read_text(encoding="utf-8")
+    mock_httpx.post.assert_called_once()
+
+
+@patch("meetingscribe.summarizer.httpx")
+def test_summarize_returns_none_when_ollama_unavailable(mock_httpx, tmp_path):
+    import httpx as real_httpx
+    mock_httpx.post.side_effect = real_httpx.ConnectError("Connection refused")
+    mock_httpx.ConnectError = real_httpx.ConnectError
+    mock_httpx.HTTPStatusError = real_httpx.HTTPStatusError
+
     output_path = tmp_path / "summary.md"
     result = summarize(
         transcript="Test",
@@ -66,7 +94,6 @@ def test_summarize_returns_none_on_empty_key(mock_anthropic, tmp_path):
         language="ru",
         duration_seconds=60,
         api_key="",
-        model="claude-sonnet-4-6",
     )
     assert result is None
     assert not output_path.exists()

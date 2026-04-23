@@ -75,6 +75,8 @@ class Pipeline:
             duration_seconds=duration_seconds,
             api_key=self.config.anthropic_api_key,
             model=self.config.anthropic_model,
+            ollama_url=self.config.ollama_url,
+            ollama_model=self.config.ollama_model,
         )
 
         on_status(PipelineStatus.CONVERTING)

@@ -21,9 +21,13 @@ class PopupWindow:
         self,
         on_start: Callable[[str, str], None],
         on_stop: Callable[[], None],
+        on_api_key_changed: Callable[[str], None] | None = None,
+        initial_api_key: str = "",
     ):
         self._on_start = on_start
         self._on_stop = on_stop
+        self._on_api_key_changed = on_api_key_changed
+        self._initial_api_key = initial_api_key
         self._root: tk.Tk | None = None
         self._recording = False
         self._elapsed = 0
@@ -38,7 +42,7 @@ class PopupWindow:
 
         self._root = tk.Tk()
         self._root.title("MeetingScribe")
-        self._root.geometry("320x280")
+        self._root.geometry("320x350")
         self._root.resizable(False, False)
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -89,6 +93,37 @@ class PopupWindow:
             frame, textvariable=self._status_var, foreground="gray"
         )
         self._status_label.grid(row=4, column=0, columnspan=2, pady=5)
+
+        # Separator
+        ttk.Separator(frame, orient=tk.HORIZONTAL).grid(
+            row=5, column=0, columnspan=2, sticky=tk.EW, pady=5
+        )
+
+        # LLM indicator
+        has_key = bool(self._initial_api_key)
+        llm_text = "LLM: Claude API" if has_key else "LLM: Ollama (локальная)"
+        self._llm_var = tk.StringVar(value=llm_text)
+        self._llm_label = ttk.Label(frame, textvariable=self._llm_var, foreground="blue")
+        self._llm_label.grid(row=6, column=0, columnspan=2, pady=2)
+
+        # API Key
+        key_frame = ttk.Frame(frame)
+        key_frame.grid(row=7, column=0, columnspan=2, pady=3)
+        ttk.Label(key_frame, text="API Key:").pack(side=tk.LEFT, padx=(0, 5))
+        self._api_key_var = tk.StringVar(value=self._initial_api_key)
+        self._api_key_entry = ttk.Entry(key_frame, textvariable=self._api_key_var, width=18, show="*")
+        self._api_key_entry.pack(side=tk.LEFT)
+        self._api_key_btn = ttk.Button(key_frame, text="Сохранить", command=self._save_api_key, width=9)
+        self._api_key_btn.pack(side=tk.LEFT, padx=(5, 0))
+
+    def _save_api_key(self):
+        key = self._api_key_var.get().strip()
+        if key:
+            self._llm_var.set("LLM: Claude API")
+        else:
+            self._llm_var.set("LLM: Ollama (локальная)")
+        if self._on_api_key_changed:
+            self._on_api_key_changed(key)
 
     def _on_close(self):
         if self._root:

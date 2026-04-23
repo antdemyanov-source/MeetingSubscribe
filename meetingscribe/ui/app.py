@@ -25,6 +25,8 @@ class App:
         self.popup = PopupWindow(
             on_start=self._handle_start,
             on_stop=self._handle_stop,
+            on_api_key_changed=self._handle_api_key_changed,
+            initial_api_key=config.anthropic_api_key,
         )
 
     def run(self):
@@ -101,6 +103,11 @@ class App:
             self.popup.update_level(self.capture.audio_level)
             time.sleep(0.05)
         self.popup.update_level(0.0)
+
+    def _handle_api_key_changed(self, api_key: str):
+        self.config.anthropic_api_key = api_key
+        self.config.save()
+        self.pipeline = Pipeline(self.config)
 
     def _quit(self):
         if self.capture.is_recording:

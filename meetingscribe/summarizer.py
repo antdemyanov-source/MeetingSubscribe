@@ -1,4 +1,5 @@
 import anthropic
+import httpx
 from datetime import datetime
 from pathlib import Path
 
@@ -156,18 +157,41 @@ def build_prompt(transcript: str, meeting_type: str, **kwargs) -> str:
     )
 
 
+def _summarize_claude(prompt: str, api_key: str, model: str) -> str:
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text
+
+
+def _summarize_ollama(prompt: str, ollama_url: str, ollama_model: str) -> str:
+    response = httpx.post(
+        f"{ollama_url}/api/chat",
+        json={
+            "model": ollama_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+        },
+        timeout=600.0,
+    )
+    response.raise_for_status()
+    return response.json()["message"]["content"]
+
+
 def summarize(
     transcript: str,
     output_path: Path,
     meeting_type: str,
     language: str,
     duration_seconds: int,
-    api_key: str,
+    api_key: str = "",
     model: str = "claude-sonnet-4-6",
+    ollama_url: str = "http://localhost:11434",
+    ollama_model: str = "qwen2.5:7b",
 ) -> str | None:
-    if not api_key:
-        return None
-
     prompt = build_prompt(
         transcript,
         meeting_type,
@@ -176,14 +200,13 @@ def summarize(
         language=LANGUAGE_NAMES.get(language, language),
     )
 
-    client = anthropic.Anthropic(api_key=api_key)
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    if api_key:
+        summary_text = _summarize_claude(prompt, api_key, model)
+    else:
+        try:
+            summary_text = _summarize_ollama(prompt, ollama_url, ollama_model)
+        except (httpx.ConnectError, httpx.HTTPStatusError):
+            return None
 
-    summary_text = response.content[0].text
     output_path.write_text(summary_text, encoding="utf-8")
-
     return summary_text

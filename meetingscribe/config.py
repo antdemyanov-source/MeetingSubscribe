@@ -14,6 +14,8 @@ class Config:
     whisper_device: str = "cpu"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+    ollama_model: str = "qwen2.5:7b"
+    ollama_url: str = "http://localhost:11434"
     audio_sample_rate: int = 44100
     keep_wav: bool = False
 
