@@ -1,11 +1,16 @@
+import json
+import os
+import shutil
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
 
 from meetingscribe.config import Config
-from meetingscribe.audio_capture import AudioCapture
+from meetingscribe.audio_capture import AudioCapture, list_microphones
 from meetingscribe.pipeline import Pipeline, PipelineStatus
+from meetingscribe.session import RecordingSession, SessionManager, SessionStatus
+from meetingscribe.storage import create_recording_paths
 from meetingscribe.ui.tray import create_tray, set_tray_recording
 from meetingscribe.ui.popup import PopupWindow
 
@@ -15,18 +20,40 @@ class App:
         self.config = config
         self.capture = AudioCapture(config.audio_sample_rate)
         self.pipeline = Pipeline(config)
+        self.session_mgr = SessionManager(config.recordings_dir)
+
+        mic_devices = list_microphones()
+        mic_idx = config.mic_device_index if config.mic_device_index >= 0 else None
+        if mic_idx is not None:
+            self.capture.set_mic_device(mic_idx)
 
         self._recording_language = "ru"
         self._recording_type = "work"
+        self._recording_mic_only = False
         self._start_time: datetime | None = None
+        self._current_session_folder: Path | None = None
         self._level_thread: threading.Thread | None = None
         self._tray = None
 
         self.popup = PopupWindow(
             on_start=self._handle_start,
             on_stop=self._handle_stop,
-            on_api_key_changed=self._handle_api_key_changed,
-            initial_api_key=config.anthropic_api_key,
+            on_summarize=self._handle_summarize,
+            on_transcribe=self._handle_transcribe,
+            on_delete=self._handle_delete,
+            on_quit=self._quit,
+            on_open_folder=self._handle_open_folder,
+            on_reload=self._handle_reload,
+            on_import=self._handle_import,
+            on_mic_changed=self._handle_mic_changed,
+            on_mic_test_start=self._handle_mic_test_start,
+            on_mic_test_stop=self._handle_mic_test_stop,
+            on_gemini_key_changed=self._handle_gemini_key_changed,
+            on_claude_key_changed=self._handle_claude_key_changed,
+            initial_gemini_key=config.gemini_api_key,
+            initial_claude_key=config.anthropic_api_key,
+            mic_devices=mic_devices,
+            initial_mic_index=config.mic_device_index,
         )
 
     def run(self):
@@ -42,18 +69,48 @@ class App:
 
     def _run_popup(self):
         self.popup.show()
+        self._refresh_list()
         self.popup.run_mainloop()
 
     def _open_popup(self):
         self.popup.show()
 
-    def _handle_start(self, language: str, meeting_type: str):
+    # --- Microphone ---
+
+    def _handle_mic_changed(self, device_index: int):
+        self.capture.set_mic_device(device_index)
+        self.config.mic_device_index = device_index
+        self.config.save()
+
+    def _handle_mic_test_start(self, device_index: int):
+        try:
+            self.capture.start_mic_test(device_index)
+        except RuntimeError as e:
+            self.popup.set_status(f"Ошибка: {e}")
+            return
+
+        self._level_thread = threading.Thread(target=self._update_test_levels, daemon=True)
+        self._level_thread.start()
+
+    def _handle_mic_test_stop(self):
+        self.capture.stop_mic_test()
+
+    def _update_test_levels(self):
+        while self.capture._testing_mic:
+            self.popup.update_level(self.capture.audio_level)
+            time.sleep(0.05)
+        self.popup.update_level(0.0)
+
+    # --- Recording ---
+
+    def _handle_start(self, language: str, meeting_type: str, mic_only: bool):
         self._recording_language = language
         self._recording_type = meeting_type
+        self._recording_mic_only = mic_only
         self._start_time = datetime.now()
 
         try:
-            self.capture.start()
+            self.capture.start(mic_only=mic_only)
         except RuntimeError as e:
             self.popup.set_status(f"Ошибка: {e}")
             self.popup.reset_after_processing()
@@ -62,6 +119,16 @@ class App:
         if self._tray:
             set_tray_recording(self._tray, True)
 
+        paths = create_recording_paths(
+            self.config.recordings_dir, meeting_type, self._start_time
+        )
+        self._current_session_folder = paths.folder
+        audio_mode = "mic" if mic_only else "loopback"
+        self.session_mgr.create_session(
+            paths.folder, self._start_time, meeting_type, language, audio_mode
+        )
+        self._refresh_list()
+
         self._level_thread = threading.Thread(target=self._update_levels, daemon=True)
         self._level_thread.start()
 
@@ -69,34 +136,199 @@ class App:
         if self._tray:
             set_tray_recording(self._tray, False)
 
-        tmp_wav = Path(self.config.recordings_dir) / "_temp_recording.wav"
+        recording_type = self._recording_type
+        recording_language = self._recording_language
+        recording_mic_only = self._recording_mic_only
+        start_time = self._start_time or datetime.now()
+        folder = self._current_session_folder
+
+        ts = start_time.strftime("%H%M%S")
+        tmp_wav = Path(self.config.recordings_dir) / f"_temp_{ts}.wav"
         tmp_wav.parent.mkdir(parents=True, exist_ok=True)
         duration = self.capture.stop(tmp_wav)
 
+        if folder:
+            self.session_mgr.update_duration(folder, duration)
+            self.session_mgr.update_status(folder, SessionStatus.TRANSCRIBING)
+            self._refresh_list()
+
         thread = threading.Thread(
-            target=self._run_pipeline,
-            args=(tmp_wav, duration),
+            target=self._run_transcription,
+            args=(tmp_wav, duration, folder, recording_type,
+                  recording_language, start_time, recording_mic_only),
             daemon=True,
         )
         thread.start()
 
-    def _run_pipeline(self, wav_path: Path, duration: int):
-        def on_status(status: PipelineStatus):
-            self.popup.set_status(status.value)
+    def _run_transcription(
+        self, wav_path: Path, duration: int, folder: Path | None,
+        meeting_type: str, language: str, start_time: datetime, mic_only: bool,
+    ):
+        try:
+            audio_mode = "mic" if mic_only else "loopback"
+            self.pipeline.run_transcription(
+                wav_path=wav_path,
+                meeting_type=meeting_type,
+                language=language,
+                duration_seconds=duration,
+                start_time=start_time,
+                audio_mode=audio_mode,
+            )
+            if folder:
+                self.session_mgr.update_status(folder, SessionStatus.READY)
+        except Exception:
+            if folder:
+                self.session_mgr.update_status(folder, SessionStatus.ERROR)
+
+        self._refresh_list()
+
+    # --- Import ---
+
+    def _handle_import(self, file_path: str, meeting_type: str, language: str):
+        src = Path(file_path)
+        now = datetime.now()
+
+        paths = create_recording_paths(
+            self.config.recordings_dir, meeting_type, now
+        )
+
+        dest = paths.folder / f"audio{src.suffix}"
+        shutil.copy2(file_path, dest)
+
+        meta = {
+            "date": now.isoformat(),
+            "duration_seconds": 0,
+            "language": language,
+            "meeting_type": meeting_type,
+            "audio_mode": "import",
+            "source": "import",
+            "original_filename": src.name,
+            "has_summary": False,
+            "has_ogg": False,
+        }
+        paths.meta.write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        self.session_mgr.create_session(
+            paths.folder, now, meeting_type, language, audio_mode="import"
+        )
+        self.session_mgr.update_status(paths.folder, SessionStatus.IMPORTED)
+        self._refresh_list()
+
+    # --- Manual transcription ---
+
+    def _handle_transcribe(self, folder_key: str):
+        folder = Path(folder_key)
+        session = self.session_mgr.get_session(folder)
+        if not session:
+            return
+
+        audio_path = None
+        for ext in (".wav", ".ogg", ".mp3", ".m4a", ".flac"):
+            candidate = folder / f"audio{ext}"
+            if candidate.exists():
+                audio_path = candidate
+                break
+        if audio_path is None:
+            self.popup.set_status("Ошибка: аудиофайл не найден")
+            return
+
+        self.session_mgr.update_status(folder, SessionStatus.TRANSCRIBING)
+        self._refresh_list()
+
+        thread = threading.Thread(
+            target=self._run_manual_transcription,
+            args=(audio_path, folder, session),
+            daemon=True,
+        )
+        thread.start()
+
+    def _run_manual_transcription(
+        self, audio_path: Path, folder: Path, session: RecordingSession,
+    ):
+        try:
+            self.pipeline.run_transcription(
+                wav_path=audio_path,
+                meeting_type=session.meeting_type,
+                language=session.language,
+                duration_seconds=session.duration,
+                start_time=session.start_time,
+                audio_mode=session.audio_mode,
+            )
+            self.session_mgr.update_status(folder, SessionStatus.READY)
+        except Exception:
+            self.session_mgr.update_status(folder, SessionStatus.ERROR)
+
+        self.session_mgr.reload()
+        self._refresh_list()
+
+    # --- Summary ---
+
+    def _handle_summarize(self, folder_key: str):
+        folder = Path(folder_key)
+        session = self.session_mgr.get_session(folder)
+        if not session:
+            return
+
+        self.session_mgr.update_status(folder, SessionStatus.SUMMARIZING)
+        self._refresh_list()
+
+        thread = threading.Thread(
+            target=self._run_summary,
+            args=(folder, session.meeting_type, session.language, session.duration),
+            daemon=True,
+        )
+        thread.start()
+
+    def _run_summary(self, folder: Path, meeting_type: str, language: str, duration: int):
+        try:
+            success = self.pipeline.run_summary(
+                folder=folder,
+                meeting_type=meeting_type,
+                language=language,
+                duration_seconds=duration,
+            )
+            if success:
+                self.session_mgr.update_status(folder, SessionStatus.DONE)
+            else:
+                self.session_mgr.update_status(folder, SessionStatus.ERROR)
+        except Exception:
+            self.session_mgr.update_status(folder, SessionStatus.ERROR)
+
+        self._refresh_list()
+
+    # --- Delete ---
+
+    def _handle_delete(self, folder_key: str):
+        folder = Path(folder_key)
+        if not folder.exists():
+            self.session_mgr.remove_session(folder)
+            self._refresh_list()
+            return
 
         try:
-            self.pipeline.run(
-                wav_path=wav_path,
-                meeting_type=self._recording_type,
-                language=self._recording_language,
-                duration_seconds=duration,
-                start_time=self._start_time or datetime.now(),
-                on_status=on_status,
-            )
+            from send2trash import send2trash
+            send2trash(str(folder))
         except Exception as e:
-            self.popup.set_status(f"Ошибка: {e}")
+            self.popup.set_status(f"Ошибка удаления: {e}")
+            return
 
-        self.popup.reset_after_processing()
+        self.session_mgr.remove_session(folder)
+        self._refresh_list()
+
+    # --- Misc ---
+
+    def _handle_reload(self):
+        self.session_mgr.reload()
+        self._refresh_list()
+
+    def _handle_open_folder(self, folder_key: str):
+        os.startfile(folder_key)
+
+    def _refresh_list(self):
+        sessions = self.session_mgr.get_sorted_sessions()
+        self.popup.set_sessions(sessions)
 
     def _update_levels(self):
         while self.capture.is_recording:
@@ -104,12 +336,20 @@ class App:
             time.sleep(0.05)
         self.popup.update_level(0.0)
 
-    def _handle_api_key_changed(self, api_key: str):
+    def _handle_gemini_key_changed(self, api_key: str):
+        self.config.gemini_api_key = api_key
+        self.config.save()
+        self.pipeline = Pipeline(self.config)
+
+    def _handle_claude_key_changed(self, api_key: str):
         self.config.anthropic_api_key = api_key
         self.config.save()
         self.pipeline = Pipeline(self.config)
 
     def _quit(self):
+        if self.capture._testing_mic:
+            self.capture.stop_mic_test()
+
         if self.capture.is_recording:
             tmp = Path(self.config.recordings_dir) / "_abort.wav"
             self.capture.stop(tmp)
