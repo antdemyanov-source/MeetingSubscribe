@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -8,14 +9,11 @@ from meetingscribe.ui.app import App
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     config = Config.load()
-
-    if not config.anthropic_api_key:
-        print(
-            "WARNING: Anthropic API key not set in config.json. "
-            "Summaries will be skipped."
-        )
-
     app = App(config)
     app.run()
 

@@ -10,6 +10,7 @@ def _make_config(tmp_path, **overrides):
     defaults = {
         "recordings_dir": str(tmp_path / "recordings"),
         "anthropic_api_key": "sk-test",
+        "gemini_api_key": "",
         "keep_wav": False,
     }
     defaults.update(overrides)

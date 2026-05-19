@@ -4,3 +4,5 @@ __pycache__/
 recordings/
 _temp_recording.wav
 .pytest_cache/
+*.log
+.meetingscribe.lock

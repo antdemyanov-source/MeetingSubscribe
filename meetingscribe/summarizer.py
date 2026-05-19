@@ -1,5 +1,4 @@
 import anthropic
-import httpx
 from datetime import datetime
 from pathlib import Path
 
@@ -167,18 +166,14 @@ def _summarize_claude(prompt: str, api_key: str, model: str) -> str:
     return response.content[0].text
 
 
-def _summarize_ollama(prompt: str, ollama_url: str, ollama_model: str) -> str:
-    response = httpx.post(
-        f"{ollama_url}/api/chat",
-        json={
-            "model": ollama_model,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-        },
-        timeout=1800.0,
+def _summarize_gemini(prompt: str, api_key: str, model: str) -> str:
+    from google import genai
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
     )
-    response.raise_for_status()
-    return response.json()["message"]["content"]
+    return response.text
 
 
 CHUNK_SIZE = 6000
@@ -223,10 +218,12 @@ def _split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
     return chunks
 
 
-def _call_llm(prompt: str, api_key: str, model: str, ollama_url: str, ollama_model: str) -> str:
+def _call_llm(prompt: str, api_key: str, model: str, gemini_api_key: str, gemini_model: str) -> str:
     if api_key:
         return _summarize_claude(prompt, api_key, model)
-    return _summarize_ollama(prompt, ollama_url, ollama_model)
+    if gemini_api_key:
+        return _summarize_gemini(prompt, gemini_api_key, gemini_model)
+    raise RuntimeError("Не настроен API ключ (Gemini или Claude)")
 
 
 def summarize(
@@ -237,8 +234,8 @@ def summarize(
     duration_seconds: int,
     api_key: str = "",
     model: str = "claude-sonnet-4-6",
-    ollama_url: str = "http://localhost:11434",
-    ollama_model: str = "qwen2.5:7b",
+    gemini_api_key: str = "",
+    gemini_model: str = "gemini-2.0-flash",
 ) -> str | None:
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     duration_str = _format_duration(duration_seconds)
@@ -250,7 +247,7 @@ def summarize(
                 transcript, meeting_type,
                 date=date_str, duration=duration_str, language=lang_str,
             )
-            summary_text = _call_llm(prompt, api_key, model, ollama_url, ollama_model)
+            summary_text = _call_llm(prompt, api_key, model, gemini_api_key, gemini_model)
         else:
             chunks = _split_into_chunks(transcript)
             chunk_summaries = []
@@ -258,7 +255,7 @@ def summarize(
                 chunk_prompt = CHUNK_PROMPT.format(
                     chunk_num=i + 1, total_chunks=len(chunks), chunk_text=chunk,
                 )
-                chunk_summary = _call_llm(chunk_prompt, api_key, model, ollama_url, ollama_model)
+                chunk_summary = _call_llm(chunk_prompt, api_key, model, gemini_api_key, gemini_model)
                 chunk_summaries.append(f"### Часть {i + 1}\n{chunk_summary}")
 
             template = PROMPTS.get(meeting_type, PROMPTS["work"])
@@ -272,8 +269,8 @@ def summarize(
                 format_instructions=f"Используй этот формат:\n{format_instructions}",
                 chunk_summaries="\n\n".join(chunk_summaries),
             )
-            summary_text = _call_llm(merge_prompt, api_key, model, ollama_url, ollama_model)
-    except (httpx.ConnectError, httpx.HTTPStatusError, httpx.ReadTimeout):
+            summary_text = _call_llm(merge_prompt, api_key, model, gemini_api_key, gemini_model)
+    except Exception:
         return None
 
     output_path.write_text(summary_text, encoding="utf-8")

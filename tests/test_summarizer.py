@@ -28,7 +28,7 @@ def test_build_prompt_therapy():
 
 
 @patch("meetingscribe.summarizer.anthropic")
-def test_summarize_calls_api_and_writes_file(mock_anthropic, tmp_path):
+def test_summarize_calls_claude_api(mock_anthropic, tmp_path):
     mock_client = MagicMock()
     mock_anthropic.Anthropic.return_value = mock_client
 
@@ -56,11 +56,9 @@ def test_summarize_calls_api_and_writes_file(mock_anthropic, tmp_path):
     assert len(call_kwargs["messages"]) == 1
 
 
-@patch("meetingscribe.summarizer.httpx")
-def test_summarize_uses_ollama_when_no_api_key(mock_httpx, tmp_path):
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"message": {"content": "# Ollama Summary"}}
-    mock_httpx.post.return_value = mock_response
+@patch("meetingscribe.summarizer._summarize_gemini")
+def test_summarize_uses_gemini_when_no_claude_key(mock_gemini, tmp_path):
+    mock_gemini.return_value = "# Gemini Summary"
 
     output_path = tmp_path / "summary.md"
     result = summarize(
@@ -70,23 +68,16 @@ def test_summarize_uses_ollama_when_no_api_key(mock_httpx, tmp_path):
         language="ru",
         duration_seconds=60,
         api_key="",
-        ollama_model="qwen2.5:7b",
+        gemini_api_key="test-gemini-key",
     )
 
     assert result is not None
     assert output_path.exists()
-    assert "Ollama Summary" in output_path.read_text(encoding="utf-8")
-    mock_httpx.post.assert_called_once()
+    assert "Gemini Summary" in output_path.read_text(encoding="utf-8")
+    mock_gemini.assert_called_once()
 
 
-@patch("meetingscribe.summarizer.httpx")
-def test_summarize_returns_none_when_ollama_unavailable(mock_httpx, tmp_path):
-    import httpx as real_httpx
-    mock_httpx.post.side_effect = real_httpx.ConnectError("Connection refused")
-    mock_httpx.ConnectError = real_httpx.ConnectError
-    mock_httpx.HTTPStatusError = real_httpx.HTTPStatusError
-    mock_httpx.ReadTimeout = real_httpx.ReadTimeout
-
+def test_summarize_returns_none_when_no_keys(tmp_path):
     output_path = tmp_path / "summary.md"
     result = summarize(
         transcript="Test",
@@ -95,6 +86,30 @@ def test_summarize_returns_none_when_ollama_unavailable(mock_httpx, tmp_path):
         language="ru",
         duration_seconds=60,
         api_key="",
+        gemini_api_key="",
     )
     assert result is None
     assert not output_path.exists()
+
+
+@patch("meetingscribe.summarizer.anthropic")
+def test_claude_preferred_over_gemini(mock_anthropic, tmp_path):
+    mock_client = MagicMock()
+    mock_anthropic.Anthropic.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text="# Claude Summary")]
+    mock_client.messages.create.return_value = mock_response
+
+    output_path = tmp_path / "summary.md"
+    result = summarize(
+        transcript="Test",
+        output_path=output_path,
+        meeting_type="work",
+        language="ru",
+        duration_seconds=60,
+        api_key="sk-test",
+        gemini_api_key="gemini-key-also-set",
+    )
+
+    assert "Claude Summary" in output_path.read_text(encoding="utf-8")
+    mock_client.messages.create.assert_called_once()

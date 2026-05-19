@@ -9,9 +9,8 @@ from meetingscribe.storage import FOLDER_MEETING_TYPE
 
 class SessionStatus(Enum):
     RECORDING = "Записываю..."
+    IMPORTING = "Импорт аудио..."
     TRANSCRIBING = "Транскрибирую..."
-    READY = "Готово к саммари"
-    SUMMARIZING = "Генерирую саммари..."
     DONE = "Готово"
     ERROR = "Ошибка"
     IMPORTED = "Загружено"
@@ -21,6 +20,7 @@ MEETING_TYPE_DISPLAY = {
     "work": "Рабочая",
     "english": "Английский",
     "therapy": "Личная",
+    "external": "Внешний источник",
 }
 
 
@@ -32,6 +32,7 @@ class RecordingSession:
     meeting_type: str
     language: str
     status: SessionStatus
+    title: str = ""
     audio_mode: str = "loopback"
     has_audio: bool = False
     has_transcript: bool = False
@@ -83,10 +84,8 @@ class SessionManager:
                     for ext in (".wav", ".ogg", ".mp3", ".m4a", ".flac")
                 )
 
-                if has_summary:
+                if has_transcript:
                     status = SessionStatus.DONE
-                elif has_transcript:
-                    status = SessionStatus.READY
                 elif has_audio and meta.get("source") == "import":
                     status = SessionStatus.IMPORTED
                 else:
@@ -99,6 +98,7 @@ class SessionManager:
                     meeting_type=meta.get("meeting_type", "work"),
                     language=meta.get("language", "ru"),
                     status=status,
+                    title=meta.get("title", ""),
                     audio_mode=meta.get("audio_mode", "loopback"),
                     has_audio=has_audio,
                     has_transcript=has_transcript,
@@ -134,7 +134,7 @@ class SessionManager:
         has_audio = (folder / "audio.wav").exists() or (folder / "audio.ogg").exists()
 
         if has_transcript:
-            status = SessionStatus.READY
+            status = SessionStatus.DONE
         else:
             status = SessionStatus.ERROR
 
@@ -179,12 +179,24 @@ class SessionManager:
         if key in self.sessions:
             self.sessions[key].duration = duration
 
+    def update_title(self, folder: Path, title: str):
+        key = str(folder)
+        if key in self.sessions:
+            self.sessions[key].title = title
+        meta_path = folder / "meta.json"
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            meta["title"] = title
+            meta_path.write_text(
+                json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
     def get_session(self, folder: Path) -> RecordingSession | None:
         return self.sessions.get(str(folder))
 
     def reload(self):
         active = {k: v for k, v in self.sessions.items()
-                  if v.status in (SessionStatus.RECORDING, SessionStatus.TRANSCRIBING, SessionStatus.SUMMARIZING)}
+                  if v.status in (SessionStatus.RECORDING, SessionStatus.IMPORTING, SessionStatus.TRANSCRIBING)}
         self.sessions = active
         self._load_existing()
 

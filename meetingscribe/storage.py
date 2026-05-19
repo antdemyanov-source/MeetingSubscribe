@@ -6,7 +6,10 @@ MEETING_TYPE_FOLDER = {
     "work": "work_meeting",
     "english": "english_lesson",
     "therapy": "therapy_session",
+    "external": "external_source",
 }
+
+FOLDER_MEETING_TYPE = {v: k for k, v in MEETING_TYPE_FOLDER.items()}
 
 
 @dataclass

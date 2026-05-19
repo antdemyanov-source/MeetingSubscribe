@@ -12,12 +12,13 @@ class Config:
     default_meeting_type: str = "work"
     whisper_model: str = "turbo"
     whisper_device: str = "cpu"
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-6"
-    ollama_model: str = "qwen2.5:7b"
-    ollama_url: str = "http://localhost:11434"
     audio_sample_rate: int = 44100
+    mic_device_name: str = ""
+    mic_volume: float = 0.5
     keep_wav: bool = False
+    silence_threshold: float = 0.03
+    silence_auto_stop_minutes: int = 5
+    max_recording_minutes: int = 70
 
     def __post_init__(self):
         if not self.recordings_dir:
