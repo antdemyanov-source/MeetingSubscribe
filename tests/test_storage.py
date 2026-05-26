@@ -27,16 +27,16 @@ def test_english_lesson_type(tmp_path):
     assert paths.folder.parent.parent.name == "2026"
 
 
-def test_therapy_session_type(tmp_path):
+def test_personal_meeting_type(tmp_path):
     dt = datetime(2026, 1, 5, 18, 45)
-    paths = create_recording_paths(str(tmp_path), "therapy", start_time=dt)
-    assert paths.folder.name == "2026-01-05_18-45_therapy_session"
+    paths = create_recording_paths(str(tmp_path), "personal", start_time=dt)
+    assert paths.folder.name == "2026-01-05_18-45_personal_meeting"
 
 
 def test_all_meeting_types_mapped():
     assert "work" in MEETING_TYPE_FOLDER
     assert "english" in MEETING_TYPE_FOLDER
-    assert "therapy" in MEETING_TYPE_FOLDER
+    assert "personal" in MEETING_TYPE_FOLDER
 
 
 def test_uses_current_time_when_not_specified(tmp_path):

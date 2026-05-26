@@ -15,7 +15,7 @@ LANGUAGES = [
 MEETING_TYPES = [
     ("Рабочая встреча", "work"),
     ("Урок английского", "english"),
-    ("Личная", "therapy"),
+    ("Личная встреча", "personal"),
     ("Внешний источник", "external"),
 ]
 
@@ -41,6 +41,7 @@ class PopupWindow:
         on_mic_test_stop: Callable[[], None] | None = None,
         on_settings: Callable[[], dict] | None = None,
         on_settings_changed: Callable[[dict], None] | None = None,
+        on_obsidian: Callable[[str], None] | None = None,
         mic_devices: list[dict] | None = None,
         initial_mic_name: str = "",
         initial_whisper_model: str = "turbo",
@@ -61,6 +62,7 @@ class PopupWindow:
         self._on_mic_test_stop = on_mic_test_stop
         self._on_settings = on_settings
         self._on_settings_changed = on_settings_changed
+        self._on_obsidian = on_obsidian
         self._mic_devices = mic_devices or []
         self._initial_mic_name = initial_mic_name
         self._initial_whisper_model = initial_whisper_model
@@ -203,7 +205,7 @@ class PopupWindow:
         self._tab_var = tk.StringVar(value="all")
         tab_items = [
             ("Все", "all"), ("Работа", "work"), ("Английский", "english"),
-            ("Личное", "therapy"), ("Внешние", "external"),
+            ("Личное", "personal"), ("Внешние", "external"),
         ]
         for label, value in tab_items:
             ttk.Radiobutton(
@@ -256,6 +258,11 @@ class PopupWindow:
             action_frame, text="Открыть папку", command=self._open_selected_folder, state="disabled"
         )
         self._folder_btn.pack(side=tk.LEFT, padx=(0, 10), ipadx=5)
+
+        self._obsidian_btn = ttk.Button(
+            action_frame, text="В Obsidian", command=self._send_to_obsidian, state="disabled"
+        )
+        self._obsidian_btn.pack(side=tk.LEFT, padx=(0, 10), ipadx=5)
 
         self._delete_btn = ttk.Button(
             action_frame, text="Удалить", command=self._delete_selected, state="disabled"
@@ -440,7 +447,7 @@ class PopupWindow:
 
         dialog = tk.Toplevel(self._root)
         dialog.title("Настройки записи")
-        dialog.geometry("400x280")
+        dialog.geometry("400x350")
         dialog.resizable(False, False)
         dialog.grab_set()
         dialog.transient(self._root)
@@ -486,18 +493,35 @@ class PopupWindow:
             frame, from_=10, to=180, increment=10, textvariable=max_min_var, width=5)
         max_spin.grid(row=5, column=1, sticky=tk.E, pady=(0, 3))
         ttk.Label(frame, text="Запись автоматически остановится по достижении лимита",
-                  foreground="gray").grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(0, 15))
+                  foreground="gray").grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(0, 10))
+
+        # Obsidian vault path
+        ttk.Label(frame, text="Путь к Obsidian vault:").grid(
+            row=7, column=0, sticky=tk.W, pady=(0, 3))
+        vault_var = tk.StringVar(value=current.get("obsidian_vault_path", ""))
+        vault_row = ttk.Frame(frame)
+        vault_row.grid(row=8, column=0, columnspan=2, sticky=tk.EW, pady=(0, 15))
+        vault_entry = ttk.Entry(vault_row, textvariable=vault_var)
+        vault_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        def _browse_vault():
+            path = filedialog.askdirectory(parent=dialog, title="Выберите папку Obsidian vault")
+            if path:
+                vault_var.set(path)
+
+        ttk.Button(vault_row, text="Обзор", command=_browse_vault, width=8).pack(side=tk.LEFT)
 
         frame.columnconfigure(0, weight=1)
 
         btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=7, column=0, columnspan=2, sticky=tk.EW)
+        btn_frame.grid(row=9, column=0, columnspan=2, sticky=tk.EW)
 
         def on_save():
             settings = {
                 "silence_threshold": round(threshold_var.get(), 2),
                 "silence_auto_stop_minutes": silence_min_var.get(),
                 "max_recording_minutes": max_min_var.get(),
+                "obsidian_vault_path": vault_var.get().strip(),
             }
             dialog.destroy()
             if self._on_settings_changed:
@@ -505,6 +529,17 @@ class PopupWindow:
 
         ttk.Button(btn_frame, text="Сохранить", command=on_save, width=12).pack(side=tk.RIGHT, padx=(5, 0))
         ttk.Button(btn_frame, text="Отмена", command=dialog.destroy, width=12).pack(side=tk.RIGHT)
+
+    # --- Obsidian ---
+
+    def _send_to_obsidian(self):
+        selected = self._tree.selection()
+        if not selected:
+            return
+        iid = selected[0]
+        folder_key = self._folder_keys.get(iid)
+        if folder_key and self._on_obsidian:
+            self._on_obsidian(folder_key)
 
     # --- Inline title editing ---
 
@@ -654,6 +689,7 @@ class PopupWindow:
         if not selected:
             self._transcribe_btn.config(state="disabled")
             self._folder_btn.config(state="disabled")
+            self._obsidian_btn.config(state="disabled")
             self._delete_btn.config(state="disabled")
             return
 
@@ -662,6 +698,7 @@ class PopupWindow:
 
         values = self._tree.item(iid, "values")
         status_text = values[4] if len(values) > 4 else ""
+        is_done = status_text == SessionStatus.DONE.value
         is_active = status_text in (
             SessionStatus.RECORDING.value,
             SessionStatus.IMPORTING.value,
@@ -672,6 +709,7 @@ class PopupWindow:
             SessionStatus.IMPORTED.value,
         )
         self._transcribe_btn.config(state="normal" if can_transcribe else "disabled")
+        self._obsidian_btn.config(state="normal" if is_done else "disabled")
         self._delete_btn.config(state="normal" if not is_active else "disabled")
 
     def _transcribe_selected(self):

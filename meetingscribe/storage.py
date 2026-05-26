@@ -5,7 +5,7 @@ from pathlib import Path
 MEETING_TYPE_FOLDER = {
     "work": "work_meeting",
     "english": "english_lesson",
-    "therapy": "therapy_session",
+    "personal": "personal_meeting",
     "external": "external_source",
 }
 

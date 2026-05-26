@@ -19,6 +19,7 @@ class Config:
     silence_threshold: float = 0.03
     silence_auto_stop_minutes: int = 5
     max_recording_minutes: int = 70
+    obsidian_vault_path: str = ""
 
     def __post_init__(self):
         if not self.recordings_dir:

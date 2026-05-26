@@ -19,7 +19,7 @@ class SessionStatus(Enum):
 MEETING_TYPE_DISPLAY = {
     "work": "Рабочая",
     "english": "Английский",
-    "therapy": "Личная",
+    "personal": "Личная встреча",
     "external": "Внешний источник",
 }
 

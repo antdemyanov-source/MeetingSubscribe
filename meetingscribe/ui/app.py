@@ -64,6 +64,7 @@ class App:
             on_mic_test_stop=self._handle_mic_test_stop,
             on_settings=self._get_settings,
             on_settings_changed=self._handle_settings_changed,
+            on_obsidian=self._handle_obsidian,
             mic_devices=mic_devices,
             initial_mic_name=config.mic_device_name,
             initial_whisper_model=config.whisper_model,
@@ -130,14 +131,52 @@ class App:
             "silence_threshold": self.config.silence_threshold,
             "silence_auto_stop_minutes": self.config.silence_auto_stop_minutes,
             "max_recording_minutes": self.config.max_recording_minutes,
+            "obsidian_vault_path": self.config.obsidian_vault_path,
         }
 
     def _handle_settings_changed(self, settings: dict):
         self.config.silence_threshold = settings["silence_threshold"]
         self.config.silence_auto_stop_minutes = settings["silence_auto_stop_minutes"]
         self.config.max_recording_minutes = settings["max_recording_minutes"]
+        self.config.obsidian_vault_path = settings["obsidian_vault_path"]
         self.capture.silence_threshold = settings["silence_threshold"]
         self.config.save()
+
+    # --- Obsidian ---
+
+    def _handle_obsidian(self, folder_key: str):
+        vault_path = self.config.obsidian_vault_path
+        if not vault_path:
+            self.popup.set_status("Укажите путь к Obsidian vault в настройках")
+            return
+
+        folder = Path(folder_key)
+        summary_path = folder / "summary.md"
+        if not summary_path.exists():
+            self.popup.set_status("Summary не найден")
+            return
+
+        session = self.session_mgr.get_session(folder)
+        date_str = session.start_time.strftime("%Y-%m-%d") if session else "unknown"
+        title = session.title if session and session.title else session.display_type if session else "Meeting"
+        safe_title = "".join(c if c not in '<>:"/\\|?*' else "_" for c in title)
+        filename = f"{date_str} {safe_title}.md"
+
+        vault = Path(vault_path)
+        target_dir = vault / "MeetingScribe"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_file = target_dir / filename
+
+        content = summary_path.read_text(encoding="utf-8")
+        target_file.write_text(content, encoding="utf-8")
+
+        vault_name = vault.name
+        relative = f"MeetingScribe/{filename}"
+        import urllib.parse
+        uri = f"obsidian://open?vault={urllib.parse.quote(vault_name)}&file={urllib.parse.quote(relative)}"
+        os.startfile(uri)
+
+        self.popup.set_status(f"Скопировано в Obsidian: {filename}")
 
     def _update_test_levels(self):
         while self.capture._testing_mic:

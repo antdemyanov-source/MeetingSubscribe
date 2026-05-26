@@ -6,7 +6,7 @@ from meetingscribe.summarizer import summarize, build_prompt, PROMPTS
 def test_all_meeting_types_have_prompts():
     assert "work" in PROMPTS
     assert "english" in PROMPTS
-    assert "therapy" in PROMPTS
+    assert "personal" in PROMPTS
 
 
 def test_build_prompt_work():
@@ -21,8 +21,8 @@ def test_build_prompt_english():
     assert "vocabulary" in prompt.lower() or "лексик" in prompt.lower()
 
 
-def test_build_prompt_therapy():
-    prompt = build_prompt("Session transcript", "therapy")
+def test_build_prompt_personal():
+    prompt = build_prompt("Session transcript", "personal")
     assert "Session transcript" in prompt
     assert "инсайт" in prompt.lower() or "insight" in prompt.lower()
 
