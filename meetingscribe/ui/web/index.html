@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>MeetingScribe</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --bg-panel: #252526;
+    --bg-hover: #2a2d2e;
+    --bg-active: #37373d;
+    --border: #333333;
+    --text: #cccccc;
+    --text-bright: #e8e8e8;
+    --text-dim: #858585;
+    --accent: #0078d4;
+    --accent-hover: #1a86d9;
+    --green: #89d185;
+    --amber: #cca700;
+    --red: #f48771;
+    --blue: #75beff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+  svg { display: block; flex-shrink: 0; }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .app-name { font-size: 13px; color: var(--text-bright); margin-right: 4px; }
+  .app-name b { font-weight: 600; }
+  .spacer { flex: 1; }
+
+  .btn {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 3px;
+    font: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: var(--bg-active); }
+  .btn.icon { padding: 5px; }
+  .btn.primary { background: var(--accent); color: #ffffff; }
+  .btn.primary:hover { background: var(--accent-hover); }
+  .btn.dim { color: var(--text-dim); }
+  .btn.outline { border: 1px solid var(--border); }
+  .btn.outline.active { background: var(--bg-active); border-color: var(--accent); color: var(--text-bright); }
+
+  nav {
+    display: flex;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .tab {
+    padding: 8px 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text-bright); border-bottom-color: var(--accent); }
+  .tab.disabled { opacity: .35; cursor: default; }
+  .tab.disabled:hover { color: var(--text-dim); }
+  .tab .count { color: var(--text-dim); margin-left: 5px; font-size: 11px; }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 4px;
+  }
+  .search {
+    flex: 1;
+    max-width: 300px;
+    position: relative;
+    color: var(--text-dim);
+  }
+  .search input {
+    width: 100%;
+    background: #3c3c3c;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text);
+    font: inherit;
+    padding: 4px 8px 4px 26px;
+    outline: none;
+  }
+  .search input:focus { border-color: var(--accent); }
+  .search svg { position: absolute; left: 7px; top: 6px; }
+  .search-clear {
+    display: none;
+    position: absolute;
+    right: 3px;
+    top: 3px;
+    width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .search-clear:hover { background: #4a4a4a; color: var(--text); }
+  .search.has-value .search-clear { display: flex; }
+  .search.has-value input { padding-right: 24px; }
+  select.filter {
+    background: #3c3c3c;
+    border: 1px solid transparent;
+    color: var(--text);
+    border-radius: 2px;
+    padding: 4px 6px;
+    font: inherit;
+    cursor: pointer;
+    outline: none;
+  }
+
+  main { flex: 1; overflow-y: auto; padding: 4px 0 12px; }
+  main::-webkit-scrollbar { width: 10px; }
+  main::-webkit-scrollbar-thumb { background: #424242; }
+  main::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .day-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-dim);
+    padding: 12px 16px 4px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .row:hover { background: var(--bg-hover); }
+  .row:hover .actions { visibility: visible; }
+  .row .type-ico { color: var(--text-dim); }
+
+  .row-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-bright);
+  }
+  .row-act-label { color: var(--text-dim); font-size: 12px; margin-left: 8px; }
+  .row-title input, .meet-topic input {
+    width: 100%;
+    background: #3c3c3c;
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    color: var(--text-bright);
+    font: inherit;
+    padding: 1px 5px;
+    outline: none;
+  }
+  .row-meta {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .status {
+    font-size: 12px; width: 110px; text-align: right; flex-shrink: 0;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+  }
+  .status .pbar {
+    width: 100%; height: 3px;
+    background: var(--bg-active);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .status .pbar > i {
+    display: block; height: 100%; width: 0%;
+    background: var(--amber);
+    transition: width .3s ease;
+  }
+  .status .pbar.ind > i {
+    width: 40%;
+    animation: slide 1.2s linear infinite;
+    transition: none;
+  }
+  @keyframes slide {
+    from { margin-left: -40%; }
+    to { margin-left: 100%; }
+  }
+  .status.done     { color: var(--green); }
+  .status.imported { color: var(--blue); }
+  .status.error    { color: var(--red); }
+  .status.working, .status.recording { color: var(--amber); }
+
+  .actions { display: flex; gap: 2px; visibility: hidden; }
+  .act {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 3px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .act:hover { background: var(--bg-active); }
+  .act.danger:hover { color: var(--red); }
+
+  .empty { text-align: center; color: var(--text-dim); padding: 48px 0; }
+
+  /* activities */
+  .act-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    cursor: pointer;
+  }
+  .act-row:hover { background: var(--bg-hover); }
+  .act-row:hover .actions { visibility: visible; }
+  .act-row .chevron { color: var(--text-dim); transition: transform .12s; }
+  .act-row.open .chevron { transform: rotate(90deg); }
+  .act-name { flex: 1; min-width: 0; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .act-name.closed { color: var(--text-dim); }
+  .act-meta { font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+  .act-meetings { display: none; }
+  .act-row.open + .act-meetings { display: block; }
+  .meet-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 16px 5px 42px;
+    cursor: pointer;
+    font-size: 12.5px;
+  }
+  .meet-row:hover { background: var(--bg-hover); }
+  .meet-row:hover .actions { visibility: visible; }
+  .meet-topic { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meet-date { color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+
+  /* tasks */
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    cursor: pointer;
+  }
+  .task-row:hover { background: var(--bg-hover); }
+  .task-deadline { width: 80px; flex-shrink: 0; color: var(--text-dim); font-size: 12px; }
+  .task-title { flex: 1; min-width: 0; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-who { width: 130px; flex-shrink: 0; color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-act { width: 160px; flex-shrink: 0; color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task-row select {
+    background: #3c3c3c;
+    border: 1px solid transparent;
+    color: var(--text);
+    border-radius: 2px;
+    padding: 2px 4px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+    width: 100px;
+    flex-shrink: 0;
+  }
+  /* цвет статуса: правила для select нужны с той же специфичностью, что .task-row select */
+  .task-row select.st-pending, .task-row select.st-new { color: var(--text-bright); }
+  .task-row select.st-in_progress { color: var(--blue); }
+  .task-row select.st-hold { color: var(--amber); }
+  .task-row select.st-done { color: var(--green); }
+  .task-row select.st-cancelled { color: var(--text-dim); }
+  .tdot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-bright);
+    flex-shrink: 0;
+  }
+  .tdot.st-in_progress { background: var(--blue); }
+  .tdot.st-hold { background: var(--amber); }
+  .tdot.st-done { background: var(--green); }
+  .tdot.st-cancelled { background: var(--text-dim); }
+
+  footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* recording */
+  .rec-live { display: none; align-items: center; gap: 10px; }
+  .rec-live.show { display: inline-flex; }
+  .rec-dot-live {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  .rec-timer { font-variant-numeric: tabular-nums; color: var(--text-bright); }
+  .level {
+    width: 70px; height: 4px;
+    background: var(--bg-active);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .level > div { height: 100%; width: 0%; background: var(--green); transition: width .08s linear; }
+  .btn.stop { background: var(--red); color: #1e1e1e; font-weight: 600; }
+
+  .popover {
+    position: absolute;
+    top: 42px; right: 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    width: 250px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    z-index: 10;
+    display: none;
+  }
+  .popover.show { display: block; }
+  .popover label { display: block; font-size: 12px; color: var(--text-dim); margin: 8px 0 3px; }
+  .popover label:first-child { margin-top: 0; }
+  .popover select, .popover input[type=text] {
+    width: 100%;
+    background: #3c3c3c;
+    border: 1px solid transparent;
+    color: var(--text);
+    border-radius: 2px;
+    padding: 5px 6px;
+    font: inherit;
+    outline: none;
+  }
+  .popover input[type=text]:focus, .popover select:focus { border-color: var(--accent); }
+  .popover .chk { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .popover .go { margin-top: 12px; width: 100%; justify-content: center; }
+
+  #toast {
+    position: fixed;
+    bottom: 40px;
+    right: 16px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 3px;
+    font-size: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    max-width: 420px;
+    z-index: 40;
+  }
+  #toast.show { opacity: 1; }
+
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    display: none;
+    place-items: center;
+    z-index: 20;
+  }
+  .overlay.show { display: grid; }
+  .dialog {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    width: 360px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  .dialog.wide { width: 440px; }
+  .dialog p { margin-bottom: 14px; color: var(--text-bright); }
+  .dialog .sub { font-size: 12px; color: var(--text-dim); margin-top: -10px; margin-bottom: 14px; }
+  .dialog-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .dialog .btn { border: 1px solid var(--border); }
+  .dialog .btn.primary { border-color: transparent; }
+  .dialog label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 3px; }
+  .dialog label:first-of-type { margin-top: 0; }
+  .dialog select, .dialog input[type=text], .dialog input[type=number], .dialog textarea {
+    width: 100%;
+    background: #3c3c3c;
+    border: 1px solid transparent;
+    color: var(--text);
+    border-radius: 2px;
+    padding: 5px 6px;
+    font: inherit;
+    outline: none;
+  }
+  .dialog textarea { height: 64px; resize: vertical; }
+  .dialog input:focus, .dialog select:focus, .dialog textarea:focus { border-color: var(--accent); }
+  .dialog .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .dialog .chk { display: flex; align-items: center; gap: 7px; margin-top: 12px; cursor: pointer; }
+  .set-grid { display: grid; grid-template-columns: 1fr 110px; gap: 0 12px; align-items: center; }
+  .set-grid label { margin: 10px 0 3px; grid-column: 1 / -1; }
+  .mic-row { display: flex; gap: 8px; align-items: center; }
+  .mic-row select, .mic-row input { flex: 1; }
+  .mic-row .level { width: 60px; }
+  .mic-row .btn { flex-shrink: 0; }
+
+  .dialog.settings { width: 700px; }
+  .set-layout { display: flex; gap: 16px; min-height: 330px; }
+  .set-nav { width: 150px; flex-shrink: 0; border-right: 1px solid var(--border); padding-right: 10px; }
+  .set-nav-item {
+    padding: 7px 10px;
+    border-radius: 3px;
+    color: var(--text-dim);
+    cursor: pointer;
+    margin-bottom: 2px;
+  }
+  .set-nav-item:hover { color: var(--text); background: var(--bg-hover); }
+  .set-nav-item.active { color: var(--text-bright); background: var(--bg-active); }
+  .set-panes { flex: 1; min-width: 0; }
+  .set-pane { display: none; }
+  .set-pane.active { display: block; }
+  .hint { font-size: 12px; color: var(--text-dim); margin-top: 5px; line-height: 1.4; }
+  .hint code { background: var(--bg-active); border-radius: 2px; padding: 0 4px; font-family: Consolas, monospace; }
+
+  .act[disabled] { opacity: .3; cursor: default; }
+  .act[disabled]:hover { background: transparent; }
+
+  /* preview drawer */
+  #drawer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: min(620px, 72vw);
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    box-shadow: -8px 0 24px rgba(0,0,0,.4);
+    z-index: 15;
+    display: none;
+    flex-direction: column;
+  }
+  #drawer.show { display: flex; }
+  #drawer-grip {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    z-index: 1;
+  }
+  #drawer-grip:hover, #drawer-grip.dragging { background: var(--accent); opacity: .5; }
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .drawer-title { flex: 1; min-width: 0; color: var(--text-bright); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drawer-tabs { display: flex; gap: 4px; padding: 8px 14px 0; border-bottom: 1px solid var(--border); }
+  .drawer-tabs .tab { padding: 6px 10px; }
+  .drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 18px;
+    user-select: text;
+  }
+  .drawer-body::-webkit-scrollbar { width: 10px; }
+  .drawer-body::-webkit-scrollbar-thumb { background: #424242; }
+
+  /* markdown */
+  .md h1 { font-size: 18px; color: var(--text-bright); margin: 14px 0 8px; }
+  .md h2 { font-size: 15px; color: var(--text-bright); margin: 14px 0 6px; }
+  .md h3 { font-size: 13.5px; color: var(--text-bright); margin: 10px 0 4px; }
+  .md p { margin: 6px 0; }
+  .md ul, .md ol { margin: 6px 0 6px 22px; }
+  .md li { margin: 2px 0; }
+  .md blockquote { border-left: 3px solid var(--accent); padding: 2px 10px; color: var(--text-dim); margin: 6px 0; }
+  .md table { border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
+  .md th, .md td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
+  .md th { background: var(--bg-active); color: var(--text-bright); }
+  .md code { background: var(--bg-active); border-radius: 2px; padding: 0 4px; font-family: Consolas, monospace; font-size: 12px; }
+  .md hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+  .md strong { color: var(--text-bright); }
+  .md mark {
+    background: #ffcc00;
+    color: #1e1e1e;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  .match-count { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="i-mic"><path d="M8 1.5a2 2 0 0 1 2 2v4a2 2 0 1 1-4 0v-4a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 7.5a4 4 0 0 0 8 0M8 11.5v3M6 14.5h4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-folder"><path d="M1.5 3.5h4l1.5 2h7.5v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-9Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-link"><path d="M6.5 9.5 9.5 6.5M5 8 3.5 9.5a2.5 2.5 0 0 0 3.5 3.5L8.5 11.5M11 8l1.5-1.5A2.5 2.5 0 0 0 9 3L7.5 4.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-gear"><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 1.8v1.9M8 12.3v1.9M14.2 8h-1.9M3.7 8H1.8M12.4 3.6l-1.4 1.3M5 11.1l-1.4 1.3M12.4 12.4 11 11.1M5 4.9 3.6 3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-search"><circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="m10.2 10.2 3.3 3.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-play"><path d="M5 3.5v9l7-4.5-7-4.5Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-doc"><path d="M4 1.5h5.5l3 3V14.5h-8.5v-13Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8h4.5M6 10.5h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-list"><path d="M5.5 4.5h8M5.5 8h8M5.5 11.5h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M2.5 4.5h.01M2.5 8h.01M2.5 11.5h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+    <g id="i-case"><rect x="1.5" y="4.5" width="13" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 4.5v-2h5v2" fill="none" stroke="currentColor" stroke-width="1.2"/></g>
+    <g id="i-globe"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M2 8h12M8 2c-3.5 3.7-3.5 8.3 0 12M8 2c3.5 3.7 3.5 8.3 0 12" fill="none" stroke="currentColor" stroke-width="1.2"/></g>
+    <g id="i-book"><path d="M8 3.5c-1.2-1-3-1.5-6-1.5v10.5c3 0 4.8.5 6 1.5 1.2-1 3-1.5 6-1.5V2c-3 0-4.8.5-6 1.5Zm0 0V14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-person"><circle cx="8" cy="5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 14a5.5 5.5 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-record"><circle cx="8" cy="8" r="3.5" fill="currentColor"/></g>
+    <g id="i-trash"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 10h6.6L12 4M6.5 6.8v4.7M9.5 6.8v4.7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-refresh"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 1.8v2.7h-2.7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-pencil"><path d="m11.3 2.2 2.5 2.5-8.3 8.3-3 .5.5-3 8.3-8.3Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-gem"><path d="M4.5 2h7L14 6l-6 8-6-8 2.5-4Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M2 6h12M8 14 5.5 6 8 2l2.5 4L8 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-chev"><path d="m6 3.5 4.5 4.5L6 12.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-spark"><path d="M8 1.5 9.3 5.6 13.5 7 9.3 8.4 8 12.5 6.7 8.4 2.5 7l4.2-1.4L8 1.5Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M12.8 11.2l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5Z" fill="currentColor"/></g>
+    <g id="i-x"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></g>
+    <g id="i-tag"><path d="M2 2h5.5L14 8.5a1.4 1.4 0 0 1 0 2L10.5 14a1.4 1.4 0 0 1-2 0L2 7.5V2Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor"/></g>
+    <g id="i-archive"><path d="M2 2.5h12v3H2v-3ZM3 5.5h10V14H3V5.5ZM6.5 8h3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></g>
+  </defs>
+</svg>
+
+<header style="position:relative">
+  <span class="app-name"><b>MeetingScribe</b></span>
+  <div class="spacer"></div>
+  <button class="btn icon" title="Импорт аудиофайла" onclick="pickImportFile()"><svg width="16" height="16"><use href="#i-folder"/></svg></button>
+  <button class="btn icon" title="Импорт транскрипта" onclick="pickTranscriptFile()"><svg width="16" height="16"><use href="#i-doc"/></svg></button>
+  <button class="btn icon" title="Импорт по ссылке" onclick="togglePanel('url-popover')"><svg width="16" height="16"><use href="#i-link"/></svg></button>
+  <button class="btn icon" title="Настройки" onclick="showSettings()"><svg width="16" height="16"><use href="#i-gear"/></svg></button>
+
+  <button class="btn primary" id="rec-btn" onclick="togglePanel('rec-popover')"><svg width="16" height="16"><use href="#i-record"/></svg>Начать запись</button>
+
+  <span class="rec-live" id="rec-live">
+    <span class="rec-dot-live"></span>
+    <span class="rec-timer" id="rec-timer">0:00</span>
+    <span class="level"><div id="level-fill"></div></span>
+    <button class="btn stop" onclick="stopRecording()">Стоп</button>
+  </span>
+
+  <div class="popover" id="rec-popover">
+    <label>Тип встречи</label>
+    <select id="rec-type">
+      <option value="work" selected>Рабочая</option>
+      <option value="english">Английский</option>
+      <option value="personal">Личная встреча</option>
+    </select>
+    <label>Язык</label>
+    <select id="rec-lang">
+      <option value="ru" selected>Русский</option>
+      <option value="en">English</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="rec-mic-only">Только микрофон</label>
+    <button class="btn primary go" onclick="startRecording()"><svg width="16" height="16"><use href="#i-record"/></svg>Начать</button>
+  </div>
+
+  <div class="popover" id="url-popover">
+    <label>Ссылка на видео / аудио</label>
+    <input type="text" id="url-input" placeholder="https://...">
+    <button class="btn primary go" onclick="importUrl()">Импортировать</button>
+  </div>
+
+  <div class="popover" id="import-popover">
+    <label id="import-file-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></label>
+    <label>Тип встречи</label>
+    <select id="import-type">
+      <option value="work" selected>Рабочая</option>
+      <option value="english">Английский</option>
+      <option value="personal">Личная встреча</option>
+      <option value="external">Внешний источник</option>
+    </select>
+    <label>Язык</label>
+    <select id="import-lang">
+      <option value="ru" selected>Русский</option>
+      <option value="en">English</option>
+    </select>
+    <button class="btn primary go" onclick="confirmImport()">Импортировать</button>
+  </div>
+
+  <div class="popover" id="transcript-import-popover">
+    <label id="transcript-import-file-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></label>
+    <label>Тип встречи</label>
+    <select id="transcript-import-type">
+      <option value="work" selected>Рабочая</option>
+      <option value="english">Английский</option>
+      <option value="personal">Личная встреча</option>
+      <option value="external">Внешний источник</option>
+    </select>
+    <button class="btn primary go" onclick="confirmImportTranscript()">Импортировать</button>
+  </div>
+</header>
+
+<nav>
+  <div class="tab active" id="tab-recordings" onclick="switchTab('recordings')">Записи<span class="count" id="cnt">0</span></div>
+  <div class="tab" id="tab-activities" onclick="switchTab('activities')">Активности</div>
+  <div class="tab" id="tab-tasks" onclick="switchTab('tasks')">Задачи</div>
+</nav>
+
+<div class="toolbar" id="toolbar-recordings">
+  <div class="search">
+    <svg width="14" height="14" viewBox="0 0 16 16"><use href="#i-search"/></svg>
+    <input id="q" placeholder="Поиск по записям" oninput="queryChanged()">
+    <button class="search-clear" id="q-clear" type="button" title="Очистить" onclick="clearQuery()"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#i-x"/></svg></button>
+  </div>
+  <select class="filter" id="qscope" onchange="scopeChanged()" title="Где искать">
+    <option value="title" selected>Название</option>
+    <option value="summary">Саммари</option>
+    <option value="transcript">Транскрипция</option>
+  </select>
+  <select class="filter" id="ftype" onchange="render()">
+    <option value="">Все типы</option>
+  </select>
+  <button class="btn icon" title="Обновить список" onclick="api('reload')"><svg width="16" height="16"><use href="#i-refresh"/></svg></button>
+</div>
+
+<div class="toolbar" id="toolbar-tasks" style="display:none">
+  <select class="filter" id="task-filter" onchange="renderTasks()">
+    <option value="active" selected>Активные</option>
+    <option value="all">Все</option>
+    <option value="pending">Новые</option>
+    <option value="in_progress">В работе</option>
+    <option value="hold">Hold</option>
+    <option value="done">Готовые</option>
+  </select>
+  <button class="btn outline" onclick="showTaskDialog(null)">+ Задача</button>
+</div>
+
+<div class="toolbar" id="toolbar-activities" style="display:none">
+  <button class="btn outline active" id="actsub-meetings" onclick="setActSubView('meetings')">Встречи</button>
+  <button class="btn outline" id="actsub-tasks" onclick="setActSubView('tasks')">Задачи</button>
+  <span style="width:8px"></span>
+  <button class="btn outline" onclick="showActDialog(null)">+ Активность</button>
+</div>
+
+<main>
+  <div class="view active" id="view-recordings"><div id="list"><div class="empty">Загрузка…</div></div></div>
+  <div class="view" id="view-activities"><div id="act-list"><div class="empty">Загрузка…</div></div></div>
+  <div class="view" id="view-tasks"><div id="task-list"><div class="empty">Загрузка…</div></div></div>
+</main>
+
+<footer>
+  <svg width="12" height="12" viewBox="0 0 16 16"><use href="#i-mic"/></svg>
+  <span id="statusbar">Готов</span>
+</footer>
+
+<div id="toast"></div>
+
+<div class="overlay" id="del-overlay">
+  <div class="dialog">
+    <p>Удалить запись?</p>
+    <div class="sub" id="del-name"></div>
+    <div class="dialog-btns">
+      <button class="btn" onclick="closeConfirm()">Отмена</button>
+      <button class="btn" style="color:var(--red)" onclick="confirmDelete()">Удалить</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="task-overlay">
+  <div class="dialog wide">
+    <p id="task-dialog-title">Новая задача</p>
+    <label>Название</label>
+    <textarea id="task-title" style="height:48px"></textarea>
+    <label>Описание</label>
+    <textarea id="task-desc"></textarea>
+    <div class="row2">
+      <div>
+        <label>Ответственный</label>
+        <input type="text" id="task-resp" list="resp-list">
+        <datalist id="resp-list"></datalist>
+      </div>
+      <div>
+        <label>Дедлайн</label>
+        <input type="text" id="task-deadline" placeholder="2026-07-31 или «пятница»">
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>Статус</label>
+        <select id="task-status"></select>
+      </div>
+      <div>
+        <label>Приоритет</label>
+        <select id="task-priority">
+          <option value="low">Низкий</option>
+          <option value="medium" selected>Средний</option>
+          <option value="high">Высокий</option>
+        </select>
+      </div>
+    </div>
+    <label>Активность</label>
+    <select id="task-activity"></select>
+    <div class="dialog-btns">
+      <button class="btn" id="task-delete-btn" style="color:var(--red);margin-right:auto" onclick="removeTask()">Удалить</button>
+      <button class="btn" onclick="hideOverlay('task-overlay')">Отмена</button>
+      <button class="btn primary" onclick="saveTask()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="act-overlay">
+  <div class="dialog">
+    <p id="act-dialog-title">Новая активность</p>
+    <label>Название</label>
+    <input type="text" id="act-name">
+    <div id="act-desc-wrap">
+      <label>Описание</label>
+      <textarea id="act-desc"></textarea>
+    </div>
+    <div class="dialog-btns">
+      <button class="btn" onclick="hideOverlay('act-overlay')">Отмена</button>
+      <button class="btn primary" onclick="saveActivity()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="assign-overlay">
+  <div class="dialog">
+    <p>Активность встречи</p>
+    <div class="sub" id="assign-name"></div>
+    <label>Выберите активность</label>
+    <select id="assign-select"></select>
+    <label>…или создайте новую</label>
+    <input type="text" id="assign-new" placeholder="Название новой активности">
+    <div class="dialog-btns">
+      <button class="btn" onclick="hideOverlay('assign-overlay')">Отмена</button>
+      <button class="btn primary" onclick="saveAssign()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="settings-overlay">
+  <div class="dialog settings">
+    <p>Настройки</p>
+    <div class="set-layout">
+      <div class="set-nav">
+        <div class="set-nav-item active" data-pane="audio" onclick="setPane('audio')">Звук</div>
+        <div class="set-nav-item" data-pane="asr" onclick="setPane('asr')">Транскрипция</div>
+        <div class="set-nav-item" data-pane="summary" onclick="setPane('summary')">Саммари</div>
+        <div class="set-nav-item" data-pane="integrations" onclick="setPane('integrations')">Интеграции</div>
+        <div class="set-nav-item" data-pane="general" onclick="setPane('general')">Общие</div>
+      </div>
+      <div class="set-panes">
+
+        <div class="set-pane active" id="pane-audio">
+          <label>Микрофон</label>
+          <div class="mic-row">
+            <select id="set-mic" onchange="micChanged()"></select>
+            <button class="btn outline" id="mic-test-btn" onclick="micTestToggle()">Тест</button>
+            <span class="level"><div id="mic-level-fill"></div></span>
+          </div>
+          <div class="set-grid">
+            <label>Порог тишины (0.01–0.2)</label>
+            <input type="number" id="set-threshold" step="0.01" min="0.01" max="0.2">
+            <span></span>
+            <label>Автостоп при тишине, минут (0 — выкл)</label>
+            <input type="number" id="set-silence" step="1" min="0" max="120">
+            <span></span>
+            <label>Макс. длительность записи, минут (0 — выкл)</label>
+            <input type="number" id="set-max" step="5" min="0" max="600">
+            <span></span>
+          </div>
+        </div>
+
+        <div class="set-pane" id="pane-asr">
+          <label>Модель Whisper</label>
+          <select id="set-model" onchange="modelChanged()"></select>
+          <div class="hint" id="model-desc"></div>
+          <div class="hint" id="model-status" style="margin-top:8px"></div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn outline" id="model-dl-btn" onclick="modelDownload()">Скачать / обновить модель</button>
+          </div>
+          <div class="hint">Модель скачивается с HuggingFace автоматически при первой транскрибации; кнопка позволяет сделать это заранее или обновить уже скачанную. Прогресс — в статусной строке.</div>
+          <label class="chk" style="margin-top:14px"><input type="checkbox" id="set-auto-transcribe">Автоматическая транскрипция после остановки записи</label>
+          <div class="hint">Если выключено, запись просто сохраняется со статусом «Загружено» — транскрибацию можно запустить позже кнопкой ▶ у записи.</div>
+        </div>
+
+        <div class="set-pane" id="pane-summary">
+          <label>Команда формирования саммари</label>
+          <textarea id="set-summary-cli" style="height:56px;font-family:Consolas,monospace;font-size:12px"></textarea>
+          <div class="hint">Плейсхолдер <code>{transcript}</code> заменяется на путь к транскрипту. По умолчанию используется Claude Code CLI, но можно подставить любую команду.</div>
+          <label>Системный промпт (правило саммари)</label>
+          <div class="hint" id="prompt-path" style="word-break:break-all"></div>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn outline" onclick="promptOpen()">Открыть промпт</button>
+            <button class="btn outline" onclick="promptLoad()">Загрузить из .md…</button>
+          </div>
+          <div class="hint">При загрузке нового промпта прежний сохраняется рядом как summary.md.bak.</div>
+          <label class="chk" style="margin-top:14px"><input type="checkbox" id="set-sum-activities">Определять активность встречи при саммари</label>
+          <label class="chk"><input type="checkbox" id="set-sum-tasks">Создавать задачи из саммари</label>
+          <div class="hint">Эти шаги выполняются системными инструкциями приложения независимо от загруженного промпта. Снятая галка также делает соответствующую вкладку неактивной.</div>
+        </div>
+
+        <div class="set-pane" id="pane-integrations">
+          <label>Путь к Obsidian vault</label>
+          <div class="mic-row">
+            <input type="text" id="set-vault" placeholder="C:/Users/.../Obsidian Vault">
+            <button class="btn outline" onclick="pickFolderInto('set-vault')">Обзор…</button>
+          </div>
+          <div class="hint">Если путь не указан, кнопки отправки в Obsidian у записей неактивны.</div>
+        </div>
+
+        <div class="set-pane" id="pane-general">
+          <label>Папка записей</label>
+          <div class="mic-row">
+            <input type="text" id="set-recdir">
+            <button class="btn outline" onclick="pickFolderInto('set-recdir')">Обзор…</button>
+          </div>
+          <div class="hint">Смена папки применяется после сохранения; записи из старой папки не переносятся.</div>
+          <label class="chk"><input type="checkbox" id="set-hide-personal">Скрывать личные встречи (из списка, поиска и фильтров)</label>
+        </div>
+
+      </div>
+    </div>
+    <div class="dialog-btns">
+      <button class="btn" onclick="hideSettings()">Отмена</button>
+      <button class="btn primary" onclick="saveSettingsUI()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div id="drawer">
+  <div id="drawer-grip"></div>
+  <div class="drawer-head">
+    <span class="drawer-title" id="drawer-title"></span>
+    <button class="btn icon" title="Открыть в редакторе" onclick="drawerOpenExternal()"><svg width="16" height="16"><use href="#i-doc"/></svg></button>
+    <button class="btn icon" title="Закрыть" onclick="hidePreview()"><svg width="16" height="16"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="drawer-tabs">
+    <div class="tab" id="dtab-summary" onclick="previewTab('summary.md')">Саммари</div>
+    <div class="tab" id="dtab-transcript" onclick="previewTab('transcript.md')">Транскрипция</div>
+  </div>
+  <div class="drawer-body"><div class="md" id="drawer-md"></div></div>
+</div>
+
+<script>
+const TYPE_ICO = {
+  "Рабочая": "i-case",
+  "Английский": "i-book",
+  "Личная встреча": "i-person",
+  "Внешний источник": "i-globe",
+};
+let sessions = [];
+let pendingDelete = null;
+let boot = { mic_devices: [], whisper_models: [], whisper_model: "", mic_name: "" };
+let micTesting = false;
+let drawerFolder = null;
+let drawerFile = "summary.md";
+let editingFolder = null;
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+function stub(name) {
+  toast(name + " — пока в классическом UI (config.json → \"ui_backend\": \"tk\")");
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+function ico(id, size = 16) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 16 16"><use href="#${id}"/></svg>`;
+}
+function api(method, ...args) {
+  if (window.pywebview) return window.pywebview.api[method](...args);
+}
+
+/* ── Вкладки ── */
+let featureActivities = true;
+let featureTasks = true;
+
+function applyFeatureTabs() {
+  document.getElementById("tab-activities").classList.toggle("disabled", !featureActivities);
+  document.getElementById("tab-tasks").classList.toggle("disabled", !featureTasks);
+  document.getElementById("actsub-tasks").style.display = featureTasks ? "" : "none";
+  // если активная вкладка стала недоступной — вернуться к записям
+  if ((!featureActivities && document.getElementById("view-activities").classList.contains("active")) ||
+      (!featureTasks && document.getElementById("view-tasks").classList.contains("active"))) {
+    switchTab("recordings");
+  }
+  render();
+}
+
+function switchTab(name) {
+  if (name === "activities" && !featureActivities) { toast("Активности отключены в настройках (раздел «Саммари»)"); return; }
+  if (name === "tasks" && !featureTasks) { toast("Задачи отключены в настройках (раздел «Саммари»)"); return; }
+  for (const t of ["recordings", "activities", "tasks"]) {
+    document.getElementById("tab-" + t).classList.toggle("active", t === name);
+    document.getElementById("view-" + t).classList.toggle("active", t === name);
+  }
+  document.getElementById("toolbar-recordings").style.display = name === "recordings" ? "" : "none";
+  document.getElementById("toolbar-tasks").style.display = name === "tasks" ? "" : "none";
+  document.getElementById("toolbar-activities").style.display = name === "activities" ? "" : "none";
+  if (name === "activities") renderActivities();
+  if (name === "tasks") renderTasks();
+}
+
+function hideOverlay(id) { document.getElementById(id).classList.remove("show"); }
+
+/* ── Записи ── */
+function statusText(s) {
+  if (s.kind === "working" && s.progress != null) {
+    return `${s.status} ${Math.round(s.progress * 100)}%`;
+  }
+  return s.status;
+}
+
+/* полнотекстовый поиск по содержимому */
+let contentMatches = null;   // {folder: count} либо null (поиск по содержимому неактивен)
+let searchTimer = null;
+
+function searchScope() { return document.getElementById("qscope").value; }
+function contentSearchActive() {
+  return searchScope() !== "title" && document.getElementById("q").value.trim().length >= 2;
+}
+
+function queryChanged() {
+  document.querySelector(".search").classList.toggle("has-value", document.getElementById("q").value.length > 0);
+  if (searchScope() === "title") { contentMatches = null; render(); return; }
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runContentSearch, 350);
+}
+function clearQuery() {
+  const q = document.getElementById("q");
+  if (!q.value) return;
+  q.value = "";
+  q.focus();
+  queryChanged();
+}
+function scopeChanged() {
+  const scope = searchScope();
+  document.getElementById("q").placeholder =
+    scope === "title" ? "Поиск по записям" :
+    scope === "summary" ? "Поиск по всем саммари" : "Поиск по всем транскрипциям";
+  contentMatches = null;
+  if (scope === "title") render();
+  else runContentSearch();
+}
+function runContentSearch() {
+  if (!contentSearchActive()) { contentMatches = null; render(); return; }
+  const q = document.getElementById("q").value.trim();
+  Promise.resolve(api("search_content", q, searchScope())).then(res => {
+    contentMatches = res || {};
+    render();
+  });
+}
+
+function render() {
+  const q = document.getElementById("q").value.toLowerCase();
+  const ft = document.getElementById("ftype").value;
+  const list = document.getElementById("list");
+
+  const byContent = contentSearchActive() && contentMatches !== null;
+  const items = sessions.filter(s =>
+    (byContent
+      ? contentMatches[s.folder] !== undefined
+      : (!q || searchScope() !== "title" || (s.title + " " + s.date + " " + s.type).toLowerCase().includes(q))) &&
+    (!ft || s.type === ft)
+  );
+  document.getElementById("cnt").textContent = sessions.length;
+
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">Ничего не найдено</div>';
+    return;
+  }
+
+  const groups = new Map();
+  for (const s of items) {
+    const day = s.date.split(" ")[0];
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(s);
+  }
+
+  let html = "";
+  for (const [day, rows] of groups) {
+    html += `<div class="day-label">${day}</div>`;
+    for (const s of rows) {
+      const time = s.date.split(" ")[1] || "";
+      const f = esc(s.folder).replace(/\\/g, "\\\\");
+      const canTranscribe = !s.has_transcript && s.kind !== "working" && s.kind !== "recording";
+      html += `
+      <div class="row" data-folder="${esc(s.folder)}" onclick="rowClick(event,'${f}')">
+        <span class="type-ico" title="${esc(s.type)}">${ico(TYPE_ICO[s.type] || "i-mic")}</span>
+        <span class="row-title" data-tfolder="${esc(s.folder)}">${esc(s.title)}${s.activity ? `<span class="row-act-label">${esc(s.activity)}</span>` : ""}</span>
+        <div class="actions">
+          <button class="act" title="Переименовать" onclick="editTitle(event,'${f}')">${ico("i-pencil", 14)}</button>
+          ${featureActivities ? `<button class="act" title="Привязать к активности" onclick="showAssign(event,'${f}')">${ico("i-tag", 14)}</button>` : ""}
+          ${s.has_transcript && !s.has_summary && s.kind !== "working" ? `<button class="act" title="Сформировать саммари" onclick="makeSummary(event,'${f}')">${ico("i-spark", 14)}</button>` : ""}
+          ${s.has_summary ? `<button class="act" ${obsidianEnabled ? "" : "disabled"} title="${obsidianEnabled ? "В Obsidian" : "Укажите путь к Obsidian vault в настройках"}" onclick="sendObsidian(event,'${f}')">${ico("i-gem", 14)}</button>` : ""}
+          ${canTranscribe ? `<button class="act" title="Транскрибировать" onclick="transcribe(event,'${f}')">${ico("i-play", 14)}</button>` : ""}
+          <button class="act" title="Открыть папку" onclick="event.stopPropagation();api('open_folder','${f}')">${ico("i-folder", 14)}</button>
+          <button class="act danger" title="Удалить" onclick="askDelete(event,'${f}')">${ico("i-trash", 14)}</button>
+        </div>
+        <div class="row-meta">
+          ${byContent ? `<span class="match-count">${contentMatches[s.folder]} совп.</span>` : ""}
+          <span>${time}</span>
+          <span style="min-width:44px;text-align:right">${s.duration || ""}</span>
+        </div>
+        <span class="status ${s.kind}">
+          <span class="st-text">${esc(statusText(s))}</span>
+          ${s.kind === "working" ? (s.progress != null
+            ? `<span class="pbar"><i style="width:${Math.round(s.progress * 100)}%"></i></span>`
+            : `<span class="pbar ind"><i></i></span>`) : ""}
+        </span>
+      </div>`;
+    }
+  }
+  list.innerHTML = html;
+}
+
+function rowClick(ev, folder) {
+  if (editingFolder) return;
+  // повторный клик по той же встрече закрывает панель просмотра
+  if (drawerFolder === folder && document.getElementById("drawer").classList.contains("show")) {
+    hidePreview();
+    return;
+  }
+  const s = sessions.find(x => x.folder === folder);
+  if (s && (s.has_transcript || s.has_summary)) showPreview(folder);
+}
+
+function transcribe(ev, folder) {
+  ev.stopPropagation();
+  api("transcribe", folder);
+  toast("Транскрибация запущена");
+}
+
+let pendingActDelete = null;
+
+function askDelete(ev, folder) {
+  ev.stopPropagation();
+  pendingDelete = folder;
+  pendingActDelete = null;
+  const s = sessions.find(x => x.folder === folder);
+  document.querySelector("#del-overlay p").textContent = "Удалить запись?";
+  document.getElementById("del-name").textContent = s ? `${s.title} — ${s.date}` : folder;
+  document.getElementById("del-overlay").classList.add("show");
+}
+function closeConfirm() {
+  pendingDelete = null;
+  pendingActDelete = null;
+  document.getElementById("del-overlay").classList.remove("show");
+}
+function confirmDelete() {
+  if (pendingActDelete) {
+    Promise.resolve(api("delete_activity", pendingActDelete)).then(renderActivities);
+  } else if (pendingDelete) {
+    api("delete", pendingDelete);
+  }
+  closeConfirm();
+}
+
+function openFile(ev, folder, name) {
+  ev.stopPropagation();
+  Promise.resolve(api("open_file", folder, name)).then(ok => {
+    if (!ok) toast("Файл не найден");
+  });
+}
+
+/* ── Переименование ── */
+function editTitle(ev, folder) {
+  ev.stopPropagation();
+  const span = document.querySelector(`.row-title[data-tfolder="${CSS.escape(folder)}"]`);
+  if (!span) return;
+  const s = sessions.find(x => x.folder === folder);
+  editingFolder = folder;
+  span.innerHTML = `<input type="text" value="${esc(s.title)}" onclick="event.stopPropagation()">`;
+  const input = span.querySelector("input");
+  input.focus();
+  input.select();
+  const done = save => {
+    editingFolder = null;
+    if (save) {
+      const title = input.value.trim();
+      api("set_title", folder, title);
+      if (s) s.title = title || "Без названия";
+    }
+    render();
+  };
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") done(true);
+    if (e.key === "Escape") done(false);
+  });
+  input.addEventListener("blur", () => done(true));
+}
+
+function editMeetingTopic(ev, folder) {
+  ev.stopPropagation();
+  const row = ev.currentTarget.closest(".meet-row");
+  const span = row ? row.querySelector(".meet-topic") : null;
+  if (!span) return;
+  const current = span.textContent === "(без темы)" ? "" : span.textContent;
+  span.innerHTML = `<input type="text" value="${esc(current)}" onclick="event.stopPropagation()">`;
+  const input = span.querySelector("input");
+  input.focus();
+  input.select();
+  const done = save => {
+    if (save) {
+      const topic = input.value.trim();
+      api("set_title", folder, topic);
+    }
+    renderActivities();
+  };
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") done(true);
+    if (e.key === "Escape") done(false);
+  });
+  input.addEventListener("blur", () => done(true));
+}
+
+function sendObsidian(ev, folder) {
+  ev.stopPropagation();
+  if (!obsidianEnabled) {
+    toast("Укажите путь к Obsidian vault в настройках (раздел «Интеграции»)");
+    return;
+  }
+  api("obsidian", folder);
+}
+
+function makeSummary(ev, folder) {
+  ev.stopPropagation();
+  api("summarize", folder);
+  toast("Саммари формируется через Claude CLI — это займёт несколько минут");
+}
+
+/* ── Просмотр markdown ── */
+function showPreview(folder) {
+  const s = sessions.find(x => x.folder === folder);
+  drawerFolder = folder;
+  drawerFile = s && s.has_summary ? "summary.md" : "transcript.md";
+  if (contentSearchActive()) {
+    const wanted = searchScope() === "summary" ? "summary.md" : "transcript.md";
+    if (s && (wanted === "summary.md" ? s.has_summary : s.has_transcript)) drawerFile = wanted;
+  }
+  document.getElementById("drawer-title").textContent = s ? s.title : "";
+  document.getElementById("dtab-summary").style.display = s && s.has_summary ? "" : "none";
+  document.getElementById("dtab-transcript").style.display = s && s.has_transcript ? "" : "none";
+  document.getElementById("drawer").classList.add("show");
+  loadDrawer();
+}
+function hidePreview() {
+  document.getElementById("drawer").classList.remove("show");
+  drawerFolder = null;
+}
+function previewTab(name) {
+  drawerFile = name;
+  loadDrawer();
+}
+function loadDrawer() {
+  document.getElementById("dtab-summary").classList.toggle("active", drawerFile === "summary.md");
+  document.getElementById("dtab-transcript").classList.toggle("active", drawerFile === "transcript.md");
+  const el = document.getElementById("drawer-md");
+  el.innerHTML = '<div class="empty">Загрузка…</div>';
+  Promise.resolve(api("read_md", drawerFolder, drawerFile)).then(text => {
+    el.innerHTML = text ? mdToHtml(text) : '<div class="empty">Файл не найден</div>';
+    if (text && contentSearchActive()) {
+      const n = highlightMatches(el, document.getElementById("q").value.trim());
+      const first = el.querySelector("mark");
+      if (first) first.scrollIntoView({ block: "center" });
+    }
+  });
+}
+
+/* обёртывание совпадений в <mark> по текстовым узлам — безопасно для HTML */
+function highlightMatches(root, term) {
+  if (!term) return 0;
+  const lower = term.toLowerCase();
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  let total = 0;
+  for (const node of nodes) {
+    const text = node.nodeValue;
+    const lt = text.toLowerCase();
+    if (!lt.includes(lower)) continue;
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    let idx;
+    while ((idx = lt.indexOf(lower, pos)) !== -1) {
+      if (idx > pos) frag.appendChild(document.createTextNode(text.slice(pos, idx)));
+      const mark = document.createElement("mark");
+      mark.textContent = text.slice(idx, idx + term.length);
+      frag.appendChild(mark);
+      pos = idx + term.length;
+      total++;
+    }
+    if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+    node.parentNode.replaceChild(frag, node);
+  }
+  return total;
+}
+function drawerOpenExternal() {
+  if (drawerFolder) api("open_file", drawerFolder, drawerFile);
+}
+
+/* ── Изменение ширины панели просмотра ── */
+(function () {
+  const grip = document.getElementById("drawer-grip");
+  const drawer = document.getElementById("drawer");
+  let dragging = false;
+  grip.addEventListener("mousedown", e => {
+    dragging = true;
+    grip.classList.add("dragging");
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const w = Math.min(Math.max(window.innerWidth - e.clientX, 380),
+                       Math.round(window.innerWidth * 0.9));
+    drawer.style.width = w + "px";
+  });
+  document.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    grip.classList.remove("dragging");
+    api("save_ui_state", { drawer_width: parseInt(drawer.style.width) || null });
+  });
+})();
+
+function mdInline(s) {
+  return s
+    .replace(/`([^`]+)`/g, (m, c) => "<code>" + c + "</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
+    .replace(/\[\[([^\]]+)\]\]/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<strong>$1</strong>");
+}
+
+function mdToHtml(md) {
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  let html = "", i = 0, inUl = false, inQuote = false;
+  const closeAll = () => {
+    if (inUl) { html += "</ul>"; inUl = false; }
+    if (inQuote) { html += "</blockquote>"; inQuote = false; }
+  };
+  while (i < lines.length) {
+    const raw = lines[i];
+    const line = esc(raw);
+    if (/^\s*$/.test(raw)) { closeAll(); i++; continue; }
+    if (/^---+\s*$/.test(raw)) { closeAll(); html += "<hr>"; i++; continue; }
+    const h = raw.match(/^(#{1,4})\s+(.*)/);
+    if (h) { closeAll(); const l = h[1].length; html += `<h${l}>` + mdInline(esc(h[2])) + `</h${l}>`; i++; continue; }
+    if (/^\s*\|/.test(raw)) {
+      closeAll();
+      let rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i]); i++; }
+      html += "<table>";
+      rows.forEach((r, ri) => {
+        if (/^\s*\|[\s\-:|]+\|\s*$/.test(r)) return;
+        const cells = r.trim().replace(/^\||\|$/g, "").split("|");
+        const tag = ri === 0 ? "th" : "td";
+        html += "<tr>" + cells.map(c => `<${tag}>` + mdInline(esc(c.trim())) + `</${tag}>`).join("") + "</tr>";
+      });
+      html += "</table>";
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(raw)) {
+      if (inQuote) { html += "</blockquote>"; inQuote = false; }
+      if (!inUl) { html += "<ul>"; inUl = true; }
+      html += "<li>" + mdInline(esc(raw.replace(/^\s*[-*]\s+/, "").replace(/^\[[ x]\]\s*/, ""))) + "</li>";
+      i++; continue;
+    }
+    if (/^\s*>\s?/.test(raw)) {
+      if (inUl) { html += "</ul>"; inUl = false; }
+      if (!inQuote) { html += "<blockquote>"; inQuote = true; }
+      html += mdInline(esc(raw.replace(/^\s*>\s?/, ""))) + "<br>";
+      i++; continue;
+    }
+    closeAll();
+    html += "<p>" + mdInline(line) + "</p>";
+    i++;
+  }
+  closeAll();
+  return html;
+}
+
+/* ── Активности ── */
+let actSubView = "meetings";
+
+function setActSubView(sub) {
+  actSubView = sub;
+  document.getElementById("actsub-meetings").classList.toggle("active", sub === "meetings");
+  document.getElementById("actsub-tasks").classList.toggle("active", sub === "tasks");
+  renderActivities();
+}
+
+function renderActivities() {
+  const el = document.getElementById("act-list");
+  el.innerHTML = '<div class="empty">Загрузка…</div>';
+  const tasksMode = actSubView === "tasks";
+  const statusesReady = taskStatusOptions.length
+    ? Promise.resolve()
+    : Promise.resolve(api("task_statuses")).then(s => (taskStatusOptions = s || []));
+  statusesReady.then(() => Promise.resolve(api("get_activities", tasksMode))).then(acts => {
+    if (!acts || !acts.length) {
+      el.innerHTML = '<div class="empty">Активностей нет</div>';
+      return;
+    }
+    let html = "";
+    for (const a of acts) {
+      const closed = a.status === "closed";
+      const last = a.last_meeting ? a.last_meeting.slice(0, 10) : "—";
+      const aid = esc(a.id);
+      const meta = tasksMode
+        ? `задач: ${a.tasks.total || 0}${a.tasks.active ? ` (активных: ${a.tasks.active})` : ""}`
+        : `встреч: ${a.meeting_count}${a.tasks.active ? ` · задач: ${a.tasks.active}` : ""} · ${last}`;
+      html += `
+      <div class="act-row" onclick="toggleActRow(this)">
+        <span class="chevron">${ico("i-chev", 12)}</span>
+        <span class="act-name${closed ? " closed" : ""}">${esc(a.name)}</span>
+        <div class="actions">
+          <button class="act" title="Переименовать" onclick="event.stopPropagation();showActDialog('${aid}', ${JSON.stringify(a.name).replace(/"/g, "&quot;")})">${ico("i-pencil", 14)}</button>
+          <button class="act" title="${closed ? "Открыть снова" : "Закрыть активность"}" onclick="event.stopPropagation();actToggleStatus('${aid}', ${closed})">${ico("i-archive", 14)}</button>
+          <button class="act danger" title="Удалить" onclick="event.stopPropagation();actDelete('${aid}', ${a.meeting_count})">${ico("i-trash", 14)}</button>
+        </div>
+        <span class="act-meta">${meta}</span>
+      </div>
+      <div class="act-meetings">`;
+      if (tasksMode) {
+        const tasks = a.tasks_list || [];
+        for (const t of tasks) tasksById[t.id] = t;
+        html += tasks.length ? tasks.map(t => taskRowHtml(t, true)).join("")
+                             : '<div class="meet-row" style="color:var(--text-dim)">Задач нет</div>';
+      } else {
+        html += a.meetings.map(m => {
+          const f = esc(m.folder || "").replace(/\\/g, "\\\\");
+          return `<div class="meet-row" onclick="meetClick('${f}')">
+            <span class="meet-topic">${esc(m.topic || "(без темы)")}</span>
+            <div class="actions">
+              <button class="act" title="Переименовать" onclick="editMeetingTopic(event,'${f}')">${ico("i-pencil", 14)}</button>
+            </div>
+            <span class="meet-date">${esc(m.date)}${m.time ? " " + esc(m.time) : ""}</span>
+          </div>`;
+        }).join("");
+      }
+      html += `</div>`;
+    }
+    el.innerHTML = html;
+  });
+}
+function toggleActRow(row) { row.classList.toggle("open"); }
+function meetClick(folder) {
+  if (!folder) return;
+  const s = sessions.find(x => x.folder === folder);
+  if (s && (s.has_transcript || s.has_summary)) showPreview(folder);
+  else api("open_folder", folder);
+}
+
+/* ── Задачи ── */
+let taskStatusOptions = [];
+let tasksById = {};
+let editingTaskId = null;
+
+function taskRowHtml(t, inActivity) {
+  const opts = taskStatusOptions.map(o =>
+    `<option value="${o.value}"${o.value === t.status ? " selected" : ""}>${esc(o.label)}</option>`
+  ).join("");
+  return `
+  <div class="task-row" ${inActivity ? 'style="padding-left:42px"' : ""} onclick="showTaskDialog(${t.id})">
+    <span class="tdot st-${t.status}" title="${esc(t.status_display || t.status)}"></span>
+    <span class="task-title" title="${esc(t.title)}">${esc(t.title)}</span>
+    <span class="task-who">${esc(t.responsible)}</span>
+    ${inActivity ? "" : `<span class="task-act">${esc(t.activity_name || "")}</span>`}
+    <span class="task-deadline">${esc(t.deadline || "")}</span>
+    <select class="st-${t.status}" onclick="event.stopPropagation()" onchange="taskStatusChanged(this, ${t.id})">${opts}</select>
+  </div>`;
+}
+
+function refreshTasksView() {
+  if (document.getElementById("view-activities").classList.contains("active")) {
+    renderActivities();
+  } else {
+    renderTasks();
+  }
+}
+
+function renderTasks() {
+  const el = document.getElementById("task-list");
+  const filt = document.getElementById("task-filter").value;
+  el.innerHTML = '<div class="empty">Загрузка…</div>';
+  const statusesReady = taskStatusOptions.length
+    ? Promise.resolve(taskStatusOptions)
+    : Promise.resolve(api("task_statuses")).then(s => (taskStatusOptions = s || []));
+  statusesReady.then(() => Promise.resolve(api("get_tasks", filt))).then(tasks => {
+    const list = tasks || [];
+    for (const t of list) tasksById[t.id] = t;
+    el.innerHTML = list.length
+      ? list.map(t => taskRowHtml(t, false)).join("")
+      : '<div class="empty">Задач нет</div>';
+  });
+}
+function taskStatusChanged(sel, taskId) {
+  api("set_task_status", taskId, sel.value);
+  sel.className = "st-" + sel.value;
+  const dot = sel.closest(".task-row").querySelector(".tdot");
+  if (dot) dot.className = "tdot st-" + sel.value;
+}
+
+function fillActivitySelect(selId, current, withEmpty) {
+  return Promise.resolve(api("activities_brief")).then(acts => {
+    const sel = document.getElementById(selId);
+    sel.innerHTML = (withEmpty ? '<option value="">(без активности)</option>' : "") +
+      (acts || []).map(a =>
+        `<option value="${esc(a.id)}"${a.id === current ? " selected" : ""}>${esc(a.name)}${a.status === "closed" ? " (закрыта)" : ""}</option>`
+      ).join("");
+  });
+}
+
+function showTaskDialog(taskId) {
+  editingTaskId = taskId;
+  const t = taskId ? tasksById[taskId] : null;
+  document.getElementById("task-dialog-title").textContent = t ? "Задача" : "Новая задача";
+  document.getElementById("task-delete-btn").style.display = t ? "" : "none";
+  document.getElementById("task-title").value = t ? t.title : "";
+  document.getElementById("task-desc").value = t ? (t.description || "") : "";
+  document.getElementById("task-resp").value = t ? (t.responsible || "") : "";
+  document.getElementById("task-deadline").value = t ? (t.deadline || "") : "";
+  document.getElementById("task-priority").value = t ? (t.priority || "medium") : "medium";
+  const stSel = document.getElementById("task-status");
+  stSel.innerHTML = taskStatusOptions.map(o =>
+    `<option value="${o.value}"${(t ? t.status : "new") === o.value ? " selected" : ""}>${esc(o.label)}</option>`).join("");
+  Promise.resolve(api("get_responsibles")).then(names => {
+    document.getElementById("resp-list").innerHTML =
+      (names || []).map(n => `<option value="${esc(n)}">`).join("");
+  });
+  fillActivitySelect("task-activity", t ? (t.activity_id || "") : "", true).then(() => {
+    document.getElementById("task-overlay").classList.add("show");
+    document.getElementById("task-title").focus();
+  });
+}
+
+function saveTask() {
+  const data = {
+    title: document.getElementById("task-title").value.replace(/\s*\n\s*/g, " ").trim(),
+    description: document.getElementById("task-desc").value,
+    responsible: document.getElementById("task-resp").value,
+    deadline: document.getElementById("task-deadline").value,
+    status: document.getElementById("task-status").value,
+    priority: document.getElementById("task-priority").value,
+    activity_id: document.getElementById("task-activity").value,
+  };
+  if (!data.title) { toast("Укажите название задачи"); return; }
+  const done = () => { hideOverlay("task-overlay"); refreshTasksView(); };
+  if (editingTaskId) {
+    Promise.resolve(api("update_task_fields", editingTaskId, data)).then(done);
+  } else {
+    Promise.resolve(api("create_task", data)).then(done);
+  }
+}
+
+function removeTask() {
+  if (!editingTaskId) return;
+  Promise.resolve(api("delete_task", editingTaskId)).then(() => {
+    hideOverlay("task-overlay");
+    refreshTasksView();
+  });
+}
+
+/* ── Активности: создание/переименование/статус/удаление ── */
+let actEditId = null;
+
+function showActDialog(actId, name) {
+  actEditId = actId;
+  document.getElementById("act-dialog-title").textContent = actId ? "Переименовать активность" : "Новая активность";
+  document.getElementById("act-name").value = name || "";
+  document.getElementById("act-desc").value = "";
+  document.getElementById("act-desc-wrap").style.display = actId ? "none" : "";
+  document.getElementById("act-overlay").classList.add("show");
+  document.getElementById("act-name").focus();
+}
+
+function saveActivity() {
+  const name = document.getElementById("act-name").value.trim();
+  if (!name) { toast("Укажите название"); return; }
+  const done = () => { hideOverlay("act-overlay"); renderActivities(); };
+  if (actEditId) {
+    Promise.resolve(api("rename_activity", actEditId, name)).then(done);
+  } else {
+    Promise.resolve(api("create_activity", name, document.getElementById("act-desc").value)).then(r => {
+      if (r && r.error) { toast(r.error); return; }
+      done();
+    });
+  }
+}
+
+function actToggleStatus(actId, closed) {
+  Promise.resolve(api("set_activity_status", actId, closed ? "active" : "closed")).then(r => {
+    if (r && r.error) { toast("Нельзя закрыть: " + r.error); return; }
+    renderActivities();
+  });
+}
+
+function actDelete(actId, meetingCount) {
+  if (meetingCount > 0) {
+    toast(`У активности ${meetingCount} встреч — они станут непривязанными`);
+  }
+  pendingActDelete = actId;
+  document.getElementById("del-name").textContent = "Активность: " + actId;
+  document.querySelector("#del-overlay p").textContent = "Удалить активность?";
+  document.getElementById("del-overlay").classList.add("show");
+}
+
+/* ── Привязка встречи к активности ── */
+let assignFolder = null;
+
+function showAssign(ev, folder) {
+  ev.stopPropagation();
+  assignFolder = folder;
+  const s = sessions.find(x => x.folder === folder);
+  document.getElementById("assign-name").textContent = s ? `${s.title} — ${s.date}` : folder;
+  document.getElementById("assign-new").value = "";
+  Promise.resolve(api("get_meeting_activity", folder)).then(current =>
+    fillActivitySelect("assign-select", current || "", true)
+  ).then(() => document.getElementById("assign-overlay").classList.add("show"));
+}
+
+function saveAssign() {
+  const newName = document.getElementById("assign-new").value.trim();
+  const doAssign = actId =>
+    Promise.resolve(api("assign_meeting", assignFolder, actId)).then(() => {
+      hideOverlay("assign-overlay");
+      toast("Активность встречи обновлена");
+    });
+  if (newName) {
+    Promise.resolve(api("create_activity", newName, "")).then(r => {
+      if (r && r.error) { toast(r.error); return; }
+      doAssign(r.id);
+    });
+  } else {
+    doAssign(document.getElementById("assign-select").value);
+  }
+}
+
+/* ── Настройки ── */
+let obsidianEnabled = false;
+
+const MODEL_DESC = {
+  "turbo": "Оптимум скорости и качества, ~1.6 ГБ. Рекомендуется.",
+  "large-v3": "Максимальное качество, ~3 ГБ. Заметно медленнее на CPU.",
+  "medium": "Хорошее качество, ~1.5 ГБ.",
+  "small": "Быстрее, качество ниже, ~0.5 ГБ.",
+  "base": "Черновое качество, ~150 МБ.",
+  "tiny": "Самая быстрая и неточная, ~75 МБ.",
+};
+
+function refreshModelDesc() {
+  const m = document.getElementById("set-model").value;
+  document.getElementById("model-desc").textContent = MODEL_DESC[m] || "";
+}
+
+window.refreshModelStatus = function () {
+  const m = document.getElementById("set-model").value;
+  Promise.resolve(api("whisper_model_status", m)).then(st => {
+    const el = document.getElementById("model-status");
+    if (!st || !st.known) { el.textContent = ""; return; }
+    el.innerHTML = st.downloaded
+      ? `Модель скачана (${(st.size_mb / 1000).toFixed(1)} ГБ) · <span style="word-break:break-all">${esc(st.path)}</span>`
+      : "Модель ещё не скачана — загрузится при первой транскрибации или по кнопке ниже.";
+    el.style.color = st.downloaded ? "var(--green)" : "var(--amber)";
+  });
+};
+
+function modelDownload() {
+  const m = document.getElementById("set-model").value;
+  api("download_whisper_model", m);
+  toast("Загрузка модели " + m + " запущена — следите за статусной строкой");
+}
+
+function setPane(name) {
+  for (const item of document.querySelectorAll(".set-nav-item")) {
+    item.classList.toggle("active", item.dataset.pane === name);
+  }
+  for (const pane of document.querySelectorAll(".set-pane")) {
+    pane.classList.toggle("active", pane.id === "pane-" + name);
+  }
+}
+
+function showSettings() {
+  closePanels();
+  const mSel = document.getElementById("set-model");
+  mSel.innerHTML = boot.whisper_models.map(m =>
+    `<option${m === boot.whisper_model ? " selected" : ""}>${m}</option>`).join("");
+  const micSel = document.getElementById("set-mic");
+  micSel.innerHTML = boot.mic_devices.map(d =>
+    `<option value="${d.index}"${d.name === boot.mic_name ? " selected" : ""}>${esc(d.name)}</option>`).join("");
+  Promise.resolve(api("summary_prompt_info")).then(info => {
+    const el = document.getElementById("prompt-path");
+    if (info) {
+      el.textContent = info.path + (info.exists ? "" : " (файл не найден!)");
+      el.style.color = info.exists ? "" : "var(--red)";
+    }
+  });
+  Promise.resolve(api("get_settings")).then(s => {
+    if (!s) s = {};
+    document.getElementById("set-threshold").value = s.silence_threshold ?? 0.03;
+    document.getElementById("set-silence").value = s.silence_auto_stop_minutes ?? 5;
+    document.getElementById("set-max").value = s.max_recording_minutes ?? 70;
+    document.getElementById("set-vault").value = s.obsidian_vault_path ?? "";
+    document.getElementById("set-hide-personal").checked = !!s.hide_personal;
+    document.getElementById("set-summary-cli").value = s.summary_cli ?? "";
+    document.getElementById("set-recdir").value = s.recordings_dir ?? "";
+    document.getElementById("set-auto-transcribe").checked = s.auto_transcribe !== false;
+    document.getElementById("set-sum-activities").checked = s.summary_activities !== false;
+    document.getElementById("set-sum-tasks").checked = s.summary_tasks !== false;
+    document.getElementById("settings-overlay").classList.add("show");
+    refreshModelDesc();
+    window.refreshModelStatus();
+  });
+}
+function hideSettings() {
+  if (micTesting) micTestToggle();
+  document.getElementById("settings-overlay").classList.remove("show");
+}
+function saveSettingsUI() {
+  const settings = {
+    silence_threshold: parseFloat(document.getElementById("set-threshold").value) || 0.03,
+    silence_auto_stop_minutes: parseInt(document.getElementById("set-silence").value) || 0,
+    max_recording_minutes: parseInt(document.getElementById("set-max").value) || 0,
+    obsidian_vault_path: document.getElementById("set-vault").value.trim(),
+    hide_personal: document.getElementById("set-hide-personal").checked,
+    summary_cli: document.getElementById("set-summary-cli").value.trim(),
+    recordings_dir: document.getElementById("set-recdir").value.trim(),
+    auto_transcribe: document.getElementById("set-auto-transcribe").checked,
+    summary_activities: document.getElementById("set-sum-activities").checked,
+    summary_tasks: document.getElementById("set-sum-tasks").checked,
+  };
+  obsidianEnabled = !!settings.obsidian_vault_path;
+  featureActivities = settings.summary_activities;
+  featureTasks = settings.summary_tasks;
+  api("save_settings", settings);
+  hideSettings();
+  toast("Настройки сохранены");
+  applyFeatureTabs();
+}
+
+function pickFolderInto(inputId) {
+  Promise.resolve(api("pick_folder")).then(path => {
+    if (path) document.getElementById(inputId).value = path;
+  });
+}
+function promptOpen() {
+  Promise.resolve(api("open_summary_prompt")).then(ok => {
+    if (!ok) toast("Файл промпта не найден");
+  });
+}
+function promptLoad() {
+  Promise.resolve(api("load_summary_prompt")).then(r => {
+    if (!r) return;
+    if (r.error) { toast("Ошибка: " + r.error); return; }
+    if (r.ok) {
+      toast("Промпт заменён (" + r.loaded_from + "), прежний сохранён в .bak");
+      Promise.resolve(api("summary_prompt_info")).then(info => {
+        if (info) document.getElementById("prompt-path").textContent = info.path;
+      });
+    }
+  });
+}
+function modelChanged() {
+  boot.whisper_model = document.getElementById("set-model").value;
+  api("set_whisper_model", boot.whisper_model);
+  toast("Модель Whisper: " + boot.whisper_model);
+  refreshModelDesc();
+  window.refreshModelStatus();
+}
+function micChanged() {
+  const sel = document.getElementById("set-mic");
+  const d = boot.mic_devices.find(x => String(x.index) === sel.value);
+  if (d) boot.mic_name = d.name;
+  api("set_mic", parseInt(sel.value));
+  if (micTesting) { api("mic_test_stop"); api("mic_test_start", parseInt(sel.value)); }
+}
+function micTestToggle() {
+  const btn = document.getElementById("mic-test-btn");
+  if (micTesting) {
+    api("mic_test_stop");
+    micTesting = false;
+    btn.textContent = "Тест";
+    document.getElementById("mic-level-fill").style.width = "0%";
+  } else {
+    api("mic_test_start", parseInt(document.getElementById("set-mic").value));
+    micTesting = true;
+    btn.textContent = "Стоп";
+  }
+}
+
+/* ── Панели в шапке ── */
+function togglePanel(id) {
+  for (const p of document.querySelectorAll(".popover")) {
+    if (p.id === id) p.classList.toggle("show");
+    else p.classList.remove("show");
+  }
+}
+function closePanels() {
+  for (const p of document.querySelectorAll(".popover")) p.classList.remove("show");
+}
+document.addEventListener("click", e => {
+  if (!e.target.closest(".popover") && !e.target.closest(".btn")) closePanels();
+});
+
+/* ── Запись ── */
+let recTimer = null;
+let recStart = 0;
+let pendingImportPath = null;
+let pendingTranscriptImportPath = null;
+
+function startRecording() {
+  closePanels();
+  const lang = document.getElementById("rec-lang").value;
+  const type = document.getElementById("rec-type").value;
+  const micOnly = document.getElementById("rec-mic-only").checked;
+  api("start_recording", lang, type, micOnly);
+
+  document.getElementById("rec-btn").style.display = "none";
+  document.getElementById("rec-live").classList.add("show");
+  recStart = Date.now();
+  document.getElementById("rec-timer").textContent = "0:00";
+  recTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - recStart) / 1000);
+    const m = Math.floor(s / 60), h = Math.floor(m / 60);
+    document.getElementById("rec-timer").textContent =
+      h ? `${h}:${String(m % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
+        : `${m}:${String(s % 60).padStart(2, "0")}`;
+  }, 500);
+  window.setStatus("Записываю...");
+}
+
+function stopRecording() {
+  api("stop_recording");
+  window.resetRecordingUI();
+  window.setStatus("Обрабатываю запись...");
+}
+
+window.resetRecordingUI = function () {
+  if (recTimer) { clearInterval(recTimer); recTimer = null; }
+  document.getElementById("rec-live").classList.remove("show");
+  document.getElementById("rec-btn").style.display = "";
+  document.getElementById("level-fill").style.width = "0%";
+};
+window.stopRecordingUI = function (reason) {
+  window.resetRecordingUI();
+  if (reason) window.setStatus(reason);
+};
+window.setLevel = function (v) {
+  const pct = Math.min(100, Math.round(v * 100)) + "%";
+  if (micTesting) document.getElementById("mic-level-fill").style.width = pct;
+  else document.getElementById("level-fill").style.width = pct;
+};
+
+/* ── Импорт ── */
+function pickImportFile() {
+  closePanels();
+  Promise.resolve(api("pick_import_file")).then(path => {
+    if (!path) return;
+    pendingImportPath = path;
+    document.getElementById("import-file-name").textContent = path.split("\\").pop();
+    document.getElementById("import-file-name").title = path;
+    togglePanel("import-popover");
+  });
+}
+function confirmImport() {
+  closePanels();
+  if (!pendingImportPath) return;
+  api("do_import", pendingImportPath,
+      document.getElementById("import-type").value,
+      document.getElementById("import-lang").value);
+  pendingImportPath = null;
+  toast("Файл импортируется");
+}
+function pickTranscriptFile() {
+  closePanels();
+  Promise.resolve(api("pick_transcript_file")).then(path => {
+    if (!path) return;
+    pendingTranscriptImportPath = path;
+    document.getElementById("transcript-import-file-name").textContent = path.split("\\").pop();
+    document.getElementById("transcript-import-file-name").title = path;
+    togglePanel("transcript-import-popover");
+  });
+}
+function confirmImportTranscript() {
+  closePanels();
+  if (!pendingTranscriptImportPath) return;
+  api("do_import_transcript", pendingTranscriptImportPath,
+      document.getElementById("transcript-import-type").value);
+  pendingTranscriptImportPath = null;
+  toast("Транскрипт импортируется");
+}
+function importUrl() {
+  const url = document.getElementById("url-input").value.trim();
+  if (!url) return;
+  closePanels();
+  document.getElementById("url-input").value = "";
+  api("import_url", url);
+  toast("Импорт по ссылке запущен");
+}
+
+/* ── Вызывается из Python ── */
+window.setSessions = function (data) {
+  sessions = data;
+  const sel = document.getElementById("ftype");
+  const current = sel.value;
+  const types = [...new Set(sessions.map(s => s.type))];
+  sel.innerHTML = '<option value="">Все типы</option>' +
+    types.map(t => `<option${t === current ? " selected" : ""}>${esc(t)}</option>`).join("");
+  render();
+};
+window.setProgress = function (folder, progress) {
+  const s = sessions.find(x => x.folder === folder);
+  if (s) {
+    s.progress = progress;
+    const st = document.querySelector(`.row[data-folder="${CSS.escape(folder)}"] .status`);
+    if (st) {
+      const txt = st.querySelector(".st-text");
+      if (txt) txt.textContent = statusText(s);
+      const bar = st.querySelector(".pbar");
+      if (bar) {
+        bar.classList.remove("ind");
+        bar.querySelector("i").style.width = Math.round(progress * 100) + "%";
+      }
+    }
+  }
+};
+window.setStatus = function (text) {
+  document.getElementById("statusbar").textContent = text;
+};
+
+async function load() {
+  boot = await window.pywebview.api.get_bootstrap();
+  try {
+    const s = await window.pywebview.api.get_settings();
+    obsidianEnabled = !!(s && s.obsidian_vault_path);
+    featureActivities = !s || s.summary_activities !== false;
+    featureTasks = !s || s.summary_tasks !== false;
+    applyFeatureTabs();
+  } catch (e) { /* настройки подтянутся при открытии диалога */ }
+  try {
+    const ui = await window.pywebview.api.get_ui_state();
+    if (ui && ui.drawer_width) {
+      document.getElementById("drawer").style.width =
+        Math.min(ui.drawer_width, Math.round(window.innerWidth * 0.9)) + "px";
+    }
+  } catch (e) { /* состояние UI необязательно */ }
+  sessions = await window.pywebview.api.get_sessions();
+  window.setSessions(sessions);
+}
+window.addEventListener("pywebviewready", load);
+</script>
+</body>
+</html>
