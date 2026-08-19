@@ -94,6 +94,13 @@ class App:
     def _handle_title_changed(self, folder_key: str, title: str):
         folder = Path(folder_key)
         self.session_mgr.update_title(folder, title)
+        try:
+            from meetingscribe import db
+            conn = db.get_connection()
+            db.update_meeting_topic(conn, folder_key, title)
+            conn.close()
+        except Exception:
+            logger.exception("Не удалось синхронизировать название встречи в БД")
 
     # --- Whisper model ---
 
