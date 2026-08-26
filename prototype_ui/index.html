@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>MeetingScribe</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --bg-panel: #252526;
+    --bg-hover: #2a2d2e;
+    --bg-active: #37373d;
+    --border: #333333;
+    --text: #cccccc;
+    --text-bright: #e8e8e8;
+    --text-dim: #858585;
+    --accent: #0078d4;
+    --accent-hover: #1a86d9;
+    --green: #89d185;
+    --amber: #cca700;
+    --red: #f48771;
+    --blue: #75beff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+  svg { display: block; flex-shrink: 0; }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .app-name { font-size: 13px; color: var(--text-bright); margin-right: 4px; }
+  .app-name b { font-weight: 600; }
+  .spacer { flex: 1; }
+
+  .btn {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 3px;
+    font: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: var(--bg-active); }
+  .btn.icon { padding: 5px; }
+  .btn.primary { background: var(--accent); color: #ffffff; }
+  .btn.primary:hover { background: var(--accent-hover); }
+
+  /* ── Tabs ── */
+  nav {
+    display: flex;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .tab {
+    padding: 8px 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text-bright); border-bottom-color: var(--accent); }
+  .tab .count { color: var(--text-dim); margin-left: 5px; font-size: 11px; }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 4px;
+  }
+  .search {
+    flex: 1;
+    max-width: 300px;
+    position: relative;
+    color: var(--text-dim);
+  }
+  .search input {
+    width: 100%;
+    background: #3c3c3c;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text);
+    font: inherit;
+    padding: 4px 8px 4px 26px;
+    outline: none;
+  }
+  .search input:focus { border-color: var(--accent); }
+  .search svg { position: absolute; left: 7px; top: 6px; }
+  select.filter {
+    background: #3c3c3c;
+    border: 1px solid transparent;
+    color: var(--text);
+    border-radius: 2px;
+    padding: 4px 6px;
+    font: inherit;
+    cursor: pointer;
+    outline: none;
+  }
+
+  /* ── List ── */
+  main { flex: 1; overflow-y: auto; padding: 4px 0 12px; }
+  main::-webkit-scrollbar { width: 10px; }
+  main::-webkit-scrollbar-thumb { background: #424242; }
+  main::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+
+  .day-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-dim);
+    padding: 12px 16px 4px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .row:hover { background: var(--bg-hover); }
+  .row:hover .actions { visibility: visible; }
+  .row .type-ico { color: var(--text-dim); }
+
+  .row-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-bright);
+  }
+  .row-meta {
+    display: flex;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .status { font-size: 12px; width: 92px; text-align: right; flex-shrink: 0; }
+  .status.done     { color: var(--green); }
+  .status.imported { color: var(--blue); }
+  .status.error    { color: var(--red); }
+  .status.working, .status.recording { color: var(--amber); }
+
+  .actions {
+    display: flex;
+    gap: 2px;
+    visibility: hidden;
+  }
+  .act {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    padding: 3px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .act:hover { background: var(--bg-active); }
+
+  .empty { text-align: center; color: var(--text-dim); padding: 48px 0; }
+
+  /* ── Status bar ── */
+  footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 40px;
+    right: 16px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 3px;
+    font-size: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Единый набор плоских иконок (codicon-стиль, 16×16, stroke 1.2, currentColor) -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="i-mic"><path d="M8 1.5a2 2 0 0 1 2 2v4a2 2 0 1 1-4 0v-4a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 7.5a4 4 0 0 0 8 0M8 11.5v3M6 14.5h4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-folder"><path d="M1.5 3.5h4l1.5 2h7.5v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-9Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-link"><path d="M6.5 9.5 9.5 6.5M5 8 3.5 9.5a2.5 2.5 0 0 0 3.5 3.5L8.5 11.5M11 8l1.5-1.5A2.5 2.5 0 0 0 9 3L7.5 4.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-gear"><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 1.8v1.9M8 12.3v1.9M14.2 8h-1.9M3.7 8H1.8M12.4 3.6l-1.4 1.3M5 11.1l-1.4 1.3M12.4 12.4 11 11.1M5 4.9 3.6 3.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-search"><circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="m10.2 10.2 3.3 3.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-play"><path d="M5 3.5v9l7-4.5-7-4.5Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-doc"><path d="M4 1.5h5.5l3 3V14.5h-8.5v-13Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8h4.5M6 10.5h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-list"><path d="M5.5 4.5h8M5.5 8h8M5.5 11.5h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M2.5 4.5h.01M2.5 8h.01M2.5 11.5h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+    <g id="i-clock"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-case"><rect x="1.5" y="4.5" width="13" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 4.5v-2h5v2" fill="none" stroke="currentColor" stroke-width="1.2"/></g>
+    <g id="i-globe"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M2 8h12M8 2c-3.5 3.7-3.5 8.3 0 12M8 2c3.5 3.7 3.5 8.3 0 12" fill="none" stroke="currentColor" stroke-width="1.2"/></g>
+    <g id="i-book"><path d="M8 3.5c-1.2-1-3-1.5-6-1.5v10.5c3 0 4.8.5 6 1.5 1.2-1 3-1.5 6-1.5V2c-3 0-4.8.5-6 1.5Zm0 0V14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+    <g id="i-person"><circle cx="8" cy="5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 14a5.5 5.5 0 0 1 11 0" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></g>
+    <g id="i-record"><circle cx="8" cy="8" r="3.5" fill="currentColor"/></g>
+  </defs>
+</svg>
+
+<header>
+  <span class="app-name"><b>MeetingScribe</b></span>
+  <div class="spacer"></div>
+  <button class="btn icon" title="Импорт аудиофайла" onclick="stub('Импорт аудиофайла')"><svg width="16" height="16"><use href="#i-folder"/></svg></button>
+  <button class="btn icon" title="Импорт по ссылке" onclick="stub('Импорт по ссылке')"><svg width="16" height="16"><use href="#i-link"/></svg></button>
+  <button class="btn icon" title="Настройки" onclick="stub('Настройки')"><svg width="16" height="16"><use href="#i-gear"/></svg></button>
+  <button class="btn primary" onclick="stub('Запись')"><svg width="16" height="16"><use href="#i-record"/></svg>Начать запись</button>
+</header>
+
+<nav>
+  <div class="tab active">Записи<span class="count" id="cnt">0</span></div>
+  <div class="tab" onclick="stub('Вкладка «Активности»')">Активности</div>
+  <div class="tab" onclick="stub('Вкладка «Задачи»')">Задачи</div>
+</nav>
+
+<div class="toolbar">
+  <div class="search">
+    <svg width="14" height="14" viewBox="0 0 16 16"><use href="#i-search"/></svg>
+    <input id="q" placeholder="Поиск по записям" oninput="render()">
+  </div>
+  <select class="filter" id="ftype" onchange="render()">
+    <option value="">Все типы</option>
+  </select>
+</div>
+
+<main id="list"><div class="empty">Загрузка…</div></main>
+
+<footer>
+  <svg width="12" height="12" viewBox="0 0 16 16"><use href="#i-mic"/></svg>
+  <span id="statusbar">Готов к записи</span>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+const TYPE_ICO = {
+  "Рабочая": "i-case",
+  "Английский": "i-book",
+  "Личная встреча": "i-person",
+  "Внешний источник": "i-globe",
+};
+let sessions = [];
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 2000);
+}
+function stub(name) { toast(name + " — в прототипе не подключено"); }
+
+function esc(s) {
+  return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+function ico(id, size = 16) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 16 16"><use href="#${id}"/></svg>`;
+}
+
+function render() {
+  const q = document.getElementById("q").value.toLowerCase();
+  const ft = document.getElementById("ftype").value;
+  const list = document.getElementById("list");
+
+  const items = sessions.filter(s =>
+    (!q || (s.title + " " + s.date + " " + s.type).toLowerCase().includes(q)) &&
+    (!ft || s.type === ft)
+  );
+  document.getElementById("cnt").textContent = sessions.length;
+
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">Ничего не найдено</div>';
+    return;
+  }
+
+  const groups = new Map();
+  for (const s of items) {
+    const day = s.date.split(" ")[0];
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(s);
+  }
+
+  let html = "";
+  for (const [day, rows] of groups) {
+    html += `<div class="day-label">${day}</div>`;
+    for (const s of rows) {
+      const time = s.date.split(" ")[1] || "";
+      const f = esc(s.folder).replace(/\\/g, "\\\\");
+      html += `
+      <div class="row" ondblclick="api('open_folder','${f}')">
+        <span class="type-ico" title="${esc(s.type)}">${ico(TYPE_ICO[s.type] || "i-mic")}</span>
+        <span class="row-title">${esc(s.title)}</span>
+        <div class="actions">
+          ${s.has_transcript ? `<button class="act" title="Транскрипция" onclick="openFile(event,'${f}','transcript.md')">${ico("i-doc", 14)}</button>` : ""}
+          ${s.has_summary ? `<button class="act" title="Саммари" onclick="openFile(event,'${f}','summary.md')">${ico("i-list", 14)}</button>` : ""}
+          ${!s.has_transcript && s.kind !== "working" ? `<button class="act" title="Транскрибировать" onclick="event.stopPropagation();stub('Транскрибация')">${ico("i-play", 14)}</button>` : ""}
+          <button class="act" title="Открыть папку" onclick="event.stopPropagation();api('open_folder','${f}')">${ico("i-folder", 14)}</button>
+        </div>
+        <div class="row-meta">
+          <span>${time}</span>
+          <span style="min-width:44px;text-align:right">${s.duration || ""}</span>
+        </div>
+        <span class="status ${s.kind}">${esc(s.status)}</span>
+      </div>`;
+    }
+  }
+  list.innerHTML = html;
+}
+
+function api(method, ...args) {
+  if (window.pywebview) window.pywebview.api[method](...args);
+}
+function openFile(ev, folder, name) {
+  ev.stopPropagation();
+  window.pywebview.api.open_file(folder, name).then(ok => {
+    if (!ok) toast("Файл не найден");
+  });
+}
+
+async function load() {
+  sessions = await window.pywebview.api.get_sessions();
+  const types = [...new Set(sessions.map(s => s.type))];
+  const sel = document.getElementById("ftype");
+  for (const t of types) {
+    const o = document.createElement("option");
+    o.value = o.textContent = t;
+    sel.appendChild(o);
+  }
+  document.getElementById("statusbar").textContent =
+    `Записей: ${sessions.length} — прототип, данные реальные, действия-заглушки`;
+  render();
+}
+window.addEventListener("pywebviewready", load);
+</script>
+</body>
+</html>

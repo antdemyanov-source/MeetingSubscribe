@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_SILENCE_THRESHOLD = 0.03
 
 
+def _is_virtual_input(name: str) -> bool:
+    low = name.lower()
+    return "stereo mix" in low or "what u hear" in low or "wave out" in low
+
+
 def list_microphones() -> list[dict]:
     pa = pyaudio.PyAudio()
     try:
@@ -22,6 +27,7 @@ def list_microphones() -> list[dict]:
                 int(info.get("hostApi", -1)) == wasapi_index
                 and int(info.get("maxInputChannels", 0)) > 0
                 and not info.get("isLoopbackDevice", False)
+                and not _is_virtual_input(info.get("name", ""))
             ):
                 mics.append({
                     "index": int(info["index"]),
@@ -52,7 +58,8 @@ def _resample(data: np.ndarray, orig_rate: int, target_rate: int) -> np.ndarray:
 
 class AudioCapture:
     def __init__(self, sample_rate: int = 44100, mic_volume: float = 0.5,
-                 silence_threshold: float = DEFAULT_SILENCE_THRESHOLD):
+                 silence_threshold: float = DEFAULT_SILENCE_THRESHOLD,
+                 mic_device_name: str = ""):
         self.target_sample_rate = sample_rate
         self.mic_volume = max(0.0, min(1.0, mic_volume))
         self.silence_threshold = silence_threshold
@@ -68,6 +75,7 @@ class AudioCapture:
         self._mic_rate: int | None = None
         self._mic_only = False
         self._mic_device_index: int | None = None
+        self._mic_device_name: str = mic_device_name
         self._testing_mic = False
         self._test_stream = None
         self._lock = threading.Lock()
@@ -161,30 +169,69 @@ class AudioCapture:
             self._pa = None
         self.audio_level = 0.0
 
+    def _is_real_microphone(self, info: dict) -> bool:
+        if info.get("isLoopbackDevice", False):
+            return False
+        if _is_virtual_input(info.get("name", "")):
+            return False
+        return int(info.get("maxInputChannels", 0)) > 0
+
+    def _find_mic_by_name(self, name: str) -> dict | None:
+        wasapi_index = self._pa.get_host_api_info_by_type(pyaudio.paWASAPI)["index"]
+        for i in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(i)
+            if (
+                int(info.get("hostApi", -1)) == wasapi_index
+                and info.get("name") == name
+                and self._is_real_microphone(info)
+            ):
+                return info
+        return None
+
+    def _find_any_real_mic(self) -> dict | None:
+        wasapi_index = self._pa.get_host_api_info_by_type(pyaudio.paWASAPI)["index"]
+        for i in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(i)
+            if (
+                int(info.get("hostApi", -1)) == wasapi_index
+                and self._is_real_microphone(info)
+            ):
+                return info
+        return None
+
     def _open_mic_stream(self):
         idx = self._mic_device_index
         mic_info = None
         if idx is not None:
             try:
-                mic_info = self._pa.get_device_info_by_index(idx)
-                logger.info("Микрофон по индексу %d: %s", idx, mic_info["name"])
+                info = self._pa.get_device_info_by_index(idx)
+                if self._is_real_microphone(info):
+                    mic_info = info
+                    logger.info("Микрофон по индексу %d: %s", idx, mic_info["name"])
+                else:
+                    logger.warning("Устройство %d (%s) — не микрофон, пропускаю",
+                                   idx, info.get("name", "?"))
             except OSError:
-                logger.warning("Микрофон с индексом %d не найден, пробую default", idx)
-                mic_info = None
+                logger.warning("Микрофон с индексом %d не найден", idx)
+        if mic_info is None and self._mic_device_name:
+            mic_info = self._find_mic_by_name(self._mic_device_name)
+            if mic_info:
+                logger.info("Микрофон найден по имени '%s': [%d]",
+                            self._mic_device_name, int(mic_info["index"]))
         if mic_info is None:
-            try:
-                mic_info = self._pa.get_default_input_device_info()
-                logger.info("Default микрофон: [%d] %s",
+            mic_info = self._find_any_real_mic()
+            if mic_info:
+                logger.info("Fallback микрофон: [%d] %s",
                             int(mic_info["index"]), mic_info["name"])
-            except OSError:
-                if self._mic_only:
-                    if self._pa:
-                        self._pa.terminate()
-                        self._pa = None
-                    raise RuntimeError("Не найден ни один микрофон.")
-                logger.warning("Микрофон не найден, запись только через loopback")
-                self._mic_stream = None
-                return
+        if mic_info is None:
+            if self._mic_only:
+                if self._pa:
+                    self._pa.terminate()
+                    self._pa = None
+                raise RuntimeError("Не найден ни один микрофон.")
+            logger.warning("Микрофон не найден, запись только через loopback")
+            self._mic_stream = None
+            return
 
         mic_native_rate = int(mic_info["defaultSampleRate"])
         if self._mic_only:

@@ -10,6 +10,8 @@ MEETING_TYPE_FOLDER = {
 }
 
 FOLDER_MEETING_TYPE = {v: k for k, v in MEETING_TYPE_FOLDER.items()}
+# старое имя папки до переименования therapy -> personal
+FOLDER_MEETING_TYPE["therapy_session"] = "personal"
 
 
 @dataclass

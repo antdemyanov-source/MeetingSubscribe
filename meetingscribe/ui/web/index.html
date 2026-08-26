@@ -1352,10 +1352,13 @@ function renderActivities() {
       } else {
         html += a.meetings.map(m => {
           const f = esc(m.folder || "").replace(/\\/g, "\\\\");
+          const s = sessions.find(x => x.folder === m.folder);
+          const hasSummary = !!(s && s.has_summary);
           return `<div class="meet-row" onclick="meetClick('${f}')">
             <span class="meet-topic">${esc(m.topic || "(без темы)")}</span>
             <div class="actions">
               <button class="act" title="Переименовать" onclick="editMeetingTopic(event,'${f}')">${ico("i-pencil", 14)}</button>
+              ${hasSummary ? `<button class="act" ${obsidianEnabled ? "" : "disabled"} title="${obsidianEnabled ? "В Obsidian" : "Укажите путь к Obsidian vault в настройках"}" onclick="sendObsidian(event,'${f}')">${ico("i-gem", 14)}</button>` : ""}
             </div>
             <span class="meet-date">${esc(m.date)}${m.time ? " " + esc(m.time) : ""}</span>
           </div>`;

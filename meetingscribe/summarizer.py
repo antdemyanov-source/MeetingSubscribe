@@ -166,16 +166,6 @@ def _summarize_claude(prompt: str, api_key: str, model: str) -> str:
     return response.content[0].text
 
 
-def _summarize_gemini(prompt: str, api_key: str, model: str) -> str:
-    from google import genai
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-    )
-    return response.text
-
-
 CHUNK_SIZE = 6000
 
 CHUNK_PROMPT = """Проанализируй этот фрагмент транскрипции встречи и выдели:
@@ -218,14 +208,6 @@ def _split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
     return chunks
 
 
-def _call_llm(prompt: str, api_key: str, model: str, gemini_api_key: str, gemini_model: str) -> str:
-    if api_key:
-        return _summarize_claude(prompt, api_key, model)
-    if gemini_api_key:
-        return _summarize_gemini(prompt, gemini_api_key, gemini_model)
-    raise RuntimeError("Не настроен API ключ (Gemini или Claude)")
-
-
 def summarize(
     transcript: str,
     output_path: Path,
@@ -234,12 +216,13 @@ def summarize(
     duration_seconds: int,
     api_key: str = "",
     model: str = "claude-sonnet-4-6",
-    gemini_api_key: str = "",
-    gemini_model: str = "gemini-2.0-flash",
 ) -> str | None:
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     duration_str = _format_duration(duration_seconds)
     lang_str = LANGUAGE_NAMES.get(language, language)
+
+    if not api_key:
+        raise RuntimeError("Не настроен API ключ Claude")
 
     try:
         if len(transcript) <= CHUNK_SIZE:
@@ -247,7 +230,7 @@ def summarize(
                 transcript, meeting_type,
                 date=date_str, duration=duration_str, language=lang_str,
             )
-            summary_text = _call_llm(prompt, api_key, model, gemini_api_key, gemini_model)
+            summary_text = _summarize_claude(prompt, api_key, model)
         else:
             chunks = _split_into_chunks(transcript)
             chunk_summaries = []
@@ -255,7 +238,7 @@ def summarize(
                 chunk_prompt = CHUNK_PROMPT.format(
                     chunk_num=i + 1, total_chunks=len(chunks), chunk_text=chunk,
                 )
-                chunk_summary = _call_llm(chunk_prompt, api_key, model, gemini_api_key, gemini_model)
+                chunk_summary = _summarize_claude(chunk_prompt, api_key, model)
                 chunk_summaries.append(f"### Часть {i + 1}\n{chunk_summary}")
 
             template = PROMPTS.get(meeting_type, PROMPTS["work"])
@@ -269,7 +252,7 @@ def summarize(
                 format_instructions=f"Используй этот формат:\n{format_instructions}",
                 chunk_summaries="\n\n".join(chunk_summaries),
             )
-            summary_text = _call_llm(merge_prompt, api_key, model, gemini_api_key, gemini_model)
+            summary_text = _summarize_claude(merge_prompt, api_key, model)
     except Exception:
         return None
 

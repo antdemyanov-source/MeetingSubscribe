@@ -71,7 +71,7 @@ def test_session_manager_loads_existing(tmp_path):
     mgr = SessionManager(str(tmp_path / "recordings"))
     sessions = mgr.get_sorted_sessions()
     assert len(sessions) == 1
-    assert sessions[0].status == SessionStatus.READY
+    assert sessions[0].status == SessionStatus.DONE
     assert sessions[0].duration == 300
 
 
@@ -113,8 +113,8 @@ def test_session_manager_update_status(tmp_path):
     mgr.update_status(folder, SessionStatus.TRANSCRIBING)
     assert mgr.get_session(folder).status == SessionStatus.TRANSCRIBING
 
-    mgr.update_status(folder, SessionStatus.READY)
-    assert mgr.get_session(folder).status == SessionStatus.READY
+    mgr.update_status(folder, SessionStatus.DONE)
+    assert mgr.get_session(folder).status == SessionStatus.DONE
 
 
 def test_session_manager_update_duration(tmp_path):
@@ -137,8 +137,48 @@ def test_sessions_sorted_newest_first(tmp_path):
     assert sessions[1].start_time == datetime(2026, 4, 20)
 
 
+def test_recorded_without_transcript_is_imported(tmp_path):
+    """Запись при выключенной автотранскрибации: аудио без транскрипта и без source."""
+    folder = tmp_path / "recordings" / "2026" / "07" / "2026-07-23_10-00_work_meeting"
+    folder.mkdir(parents=True)
+    (folder / "audio.ogg").write_bytes(b"fake audio")
+    meta = {
+        "date": "2026-07-23T10:00:00",
+        "duration_seconds": 60,
+        "meeting_type": "work",
+        "language": "ru",
+    }
+    (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    mgr = SessionManager(str(tmp_path / "recordings"))
+    sessions = mgr.get_sorted_sessions()
+    assert sessions[0].status == SessionStatus.IMPORTED
+    assert sessions[0].has_audio
+
+
 def test_imported_status_exists():
     assert SessionStatus.IMPORTED.value == "Загружено"
+
+
+def test_session_manager_loads_imported_aac(tmp_path):
+    folder = tmp_path / "recordings" / "2026" / "07" / "2026-07-11_13-05_work_meeting"
+    folder.mkdir(parents=True)
+
+    (folder / "audio.aac").write_bytes(b"fake audio")
+    meta = {
+        "date": "2026-07-11T13:05:00",
+        "duration_seconds": 0,
+        "meeting_type": "work",
+        "language": "ru",
+        "source": "import",
+    }
+    (folder / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    mgr = SessionManager(str(tmp_path / "recordings"))
+    sessions = mgr.get_sorted_sessions()
+    assert len(sessions) == 1
+    assert sessions[0].status == SessionStatus.IMPORTED
+    assert sessions[0].has_audio
 
 
 def test_session_manager_loads_imported(tmp_path):

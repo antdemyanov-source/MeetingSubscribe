@@ -43,11 +43,13 @@ def transcribe(
     language: str = "ru",
     model_size: str = "turbo",
     device: str = "cpu",
+    on_progress=None,
 ) -> str:
     _set_low_priority()
     try:
         return _do_transcribe(
-            audio_path, output_path, language, model_size, device
+            audio_path, output_path, language, model_size, device,
+            on_progress=on_progress,
         )
     finally:
         _restore_priority()
@@ -59,8 +61,12 @@ def _do_transcribe(
     language: str,
     model_size: str,
     device: str,
+    on_progress=None,
 ) -> str:
     from faster_whisper import WhisperModel, BatchedInferencePipeline
+
+    if on_progress:
+        on_progress(0.05)
 
     cpu_threads = max(1, (os.cpu_count() or 4) // 2)
     model = WhisperModel(
@@ -70,6 +76,9 @@ def _do_transcribe(
         cpu_threads=cpu_threads,
     )
     batched = BatchedInferencePipeline(model=model)
+
+    if on_progress:
+        on_progress(0.15)
 
     lang_param = None if language == "auto" else language
     segments, info = batched.transcribe(
@@ -92,6 +101,9 @@ def _do_transcribe(
     detected_lang = info.language
     duration = info.duration
 
+    if on_progress:
+        on_progress(0.25)
+
     lines = []
     lines.append("# Транскрипция\n")
     lines.append(f"**Дата:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -102,6 +114,7 @@ def _do_transcribe(
     full_text_parts = []
     prev_text = None
     repeat_count = 0
+    last_progress_pct = -1
     for segment in segments:
         text = segment.text.strip()
         if text == prev_text:
@@ -114,6 +127,13 @@ def _do_transcribe(
         timestamp = _format_timestamp(segment.start)
         lines.append(f"[{timestamp}] {text}\n")
         full_text_parts.append(text)
+
+        if on_progress and duration > 0:
+            raw = min(1.0, segment.end / duration)
+            pct = int(raw * 100)
+            if pct > last_progress_pct:
+                last_progress_pct = pct
+                on_progress(0.25 + raw * 0.75)
 
     transcript_md = "\n".join(lines)
     output_path.write_text(transcript_md, encoding="utf-8")

@@ -47,6 +47,7 @@ class Pipeline:
         start_time: datetime,
         audio_mode: str = "loopback",
         on_status: Callable[[PipelineStatus], None] | None = None,
+        on_progress=None,
     ) -> Path:
         paths = create_recording_paths(
             self.config.recordings_dir, meeting_type, start_time
@@ -65,6 +66,7 @@ class Pipeline:
             language=language,
             model_size=self.config.whisper_model,
             device=self.config.whisper_device,
+            on_progress=on_progress,
         )
 
         if on_status:

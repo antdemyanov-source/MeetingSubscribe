@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"c:/AI/MeetingScribe\" && tasklist 2>/dev/null | grep -i python; echo \"---lockfile---\"; cat .meetingscribe.lock 2>/dev/null; echo \"---\"; grep -n \"lock\" meetingscribe/__main__.py | head -20)",
+      "Read(//c/AI/MeetingScribe/**)"
+    ]
+  }
+}

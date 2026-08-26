@@ -20,6 +20,14 @@ class Config:
     silence_auto_stop_minutes: int = 5
     max_recording_minutes: int = 70
     obsidian_vault_path: str = ""
+    ui_backend: str = "tk"  # "tk" — классический UI, "web" — новый на pywebview
+    hide_personal: bool = False  # скрывать личные встречи из списка и фильтров
+    # команда формирования саммари; {transcript} заменяется на путь к transcript.md
+    summary_cli: str = 'claude -p "/summary {transcript}" --dangerously-skip-permissions'
+    auto_transcribe: bool = True  # транскрибировать автоматически после остановки записи
+    summary_activities: bool = True  # определять активность встречи при саммари
+    summary_tasks: bool = True       # создавать задачи из саммари
+    anthropic_api_key: str = ""  # для формирования саммари из UI
 
     def __post_init__(self):
         if not self.recordings_dir:

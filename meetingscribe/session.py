@@ -23,6 +23,10 @@ MEETING_TYPE_DISPLAY = {
     "external": "Внешний источник",
 }
 
+# Форматы, которые декодирует Whisper (через ffmpeg/PyAV):
+# охватывает и ручной импорт, и выгрузку downloader'а (.opus/.webm)
+AUDIO_EXTENSIONS = (".wav", ".ogg", ".opus", ".mp3", ".m4a", ".aac", ".flac", ".webm")
+
 
 @dataclass
 class RecordingSession:
@@ -81,12 +85,14 @@ class SessionManager:
                 has_transcript = (folder / "transcript.md").exists()
                 has_audio = any(
                     (folder / f"audio{ext}").exists()
-                    for ext in (".wav", ".ogg", ".mp3", ".m4a", ".flac")
+                    for ext in AUDIO_EXTENSIONS
                 )
 
                 if has_transcript:
                     status = SessionStatus.DONE
-                elif has_audio and meta.get("source") == "import":
+                elif has_audio:
+                    # есть аудио без транскрипта — готово к транскрибации
+                    # (импорт или запись при выключенной автотранскрибации)
                     status = SessionStatus.IMPORTED
                 else:
                     status = SessionStatus.ERROR
@@ -94,7 +100,7 @@ class SessionManager:
                 session = RecordingSession(
                     folder=folder,
                     start_time=start_time,
-                    duration=meta.get("duration_seconds", 0),
+                    duration=meta.get("duration_seconds") or 0,
                     meeting_type=meta.get("meeting_type", "work"),
                     language=meta.get("language", "ru"),
                     status=status,
@@ -108,7 +114,7 @@ class SessionManager:
                 pass
 
         for audio_file in self.recordings_dir.rglob("audio.*"):
-            if audio_file.suffix not in (".wav", ".ogg", ".mp3", ".m4a", ".flac"):
+            if audio_file.suffix not in AUDIO_EXTENSIONS:
                 continue
             folder = audio_file.parent
             if str(folder) in known_folders or str(folder) in self.sessions:
